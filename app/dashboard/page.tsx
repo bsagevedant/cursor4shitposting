@@ -212,15 +212,15 @@ export default function Dashboard() {
             </div>
 
             {generatedTweet && (
-              <Card className="mt-6 p-4 bg-white">
+              <Card className="mt-6 p-4">
                 <div className="flex items-start space-x-3">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold">Rahul Founder</span>
-                      <span className="text-gray-500">@RahulFounderAI</span>
+                      <span className="font-bold text-foreground">Rahul Founder</span>
+                      <span className="text-muted-foreground">@RahulFounderAI</span>
                     </div>
-                    <p className="mt-2">{generatedTweet.content}</p>
-                    <div className="mt-2 text-gray-500 text-sm flex items-center space-x-2">
+                    <p className="mt-2 text-foreground">{generatedTweet.content}</p>
+                    <div className="mt-2 text-muted-foreground text-sm flex items-center space-x-2">
                       <span>{generatedTweet.timestamp}</span>
                       <span>•</span>
                       <span>{generatedTweet.platform}</span>
@@ -277,15 +277,15 @@ export default function Dashboard() {
             </div>
 
             {/* Example Special Mode Tweet */}
-            <Card className="mt-6 p-4 bg-white">
+            <Card className="mt-6 p-4">
               <div className="flex items-start space-x-3">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <span className="font-bold">Rahul Founder</span>
-                    <span className="text-gray-500">@RahulFounderAI</span>
+                    <span className="font-bold text-foreground">Rahul Founder</span>
+                    <span className="text-muted-foreground">@RahulFounderAI</span>
                   </div>
-                  <p className="mt-2">Just got rejected by YC for the 3rd time. My parents are celebrating. My friends are celebrating. My bank account is crying. But my delusion is stronger than ever! 🚀</p>
-                  <div className="mt-2 text-gray-500 text-sm flex items-center space-x-2">
+                  <p className="mt-2 text-foreground">Just got rejected by YC for the 3rd time. My parents are celebrating. My friends are celebrating. My bank account is crying. But my delusion is stronger than ever! 🚀</p>
+                  <div className="mt-2 text-muted-foreground text-sm flex items-center space-x-2">
                     <span>12:34 PM</span>
                     <span>•</span>
                     <span>Twitter for iPhone</span>
