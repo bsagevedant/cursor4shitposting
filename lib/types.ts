@@ -1,12 +1,14 @@
 export type ToxicityLevel = 'Low' | 'Medium' | 'High';
 
 export type PostCategory = 
-  | 'Startups' 
-  | 'IIT/IIM' 
-  | 'AI/ML' 
-  | 'Crypto' 
-  | 'Hustle' 
+  | 'Startups'
+  | 'AI/ML'
+  | 'Hustle'
+  | 'IIT/IIM'
+  | 'Crypto'
   | 'Bro Culture';
+
+export type SpecialMode = 'FounderMeltdown' | 'FakeVCTakes' | 'IITBaitThread';
 
 export interface Author {
   name: string;
@@ -14,7 +16,9 @@ export interface Author {
 }
 
 export interface TemplateData {
-  templates: Record<ToxicityLevel, string[]>;
+  templates: {
+    [key in ToxicityLevel]: string[];
+  };
   phrases: {
     startup: string[];
     iit: string[];

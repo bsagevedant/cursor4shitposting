@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Brainrot Generator for Indian Tech Twitter',
+  title: 'cursor4shitposting',
   description: 'Generate random, high-engagement shitposts crafted for Indian Tech Twitter',
 };
 

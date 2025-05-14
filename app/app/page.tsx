@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 export default function App() {
   const [postContent, setPostContent] = useState('')
@@ -35,7 +36,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">cursor4shitposting</h1>
+              <Link href="/" className="text-xl font-bold text-gray-900 hover:text-gray-700">
+                cursor4shitposting
+              </Link>
             </div>
             <div className="flex items-center">
               <button
