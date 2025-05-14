@@ -2,15 +2,15 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { PostCategory } from "@/lib/types";
+import { PostCategoryType } from "@/lib/types";
 
 interface CategorySelectorProps {
-  selectedCategories: PostCategory[];
-  onChange: (categories: PostCategory[]) => void;
+  selectedCategories: PostCategoryType[];
+  onChange: (categories: PostCategoryType[]) => void;
 }
 
 export function CategorySelector({ selectedCategories, onChange }: CategorySelectorProps) {
-  const allCategories: PostCategory[] = [
+  const allCategories: PostCategoryType[] = [
     'Startups', 
     'IIT/IIM', 
     'AI/ML', 
@@ -19,7 +19,7 @@ export function CategorySelector({ selectedCategories, onChange }: CategorySelec
     'Bro Culture'
   ];
   
-  const toggleCategory = (category: PostCategory) => {
+  const toggleCategory = (category: PostCategoryType) => {
     if (selectedCategories.includes(category)) {
       // Don't allow deselecting if it would result in no categories
       if (selectedCategories.length > 1) {
@@ -30,7 +30,7 @@ export function CategorySelector({ selectedCategories, onChange }: CategorySelec
     }
   };
   
-  const getCategoryEmoji = (category: PostCategory) => {
+  const getCategoryEmoji = (category: PostCategoryType) => {
     switch(category) {
       case 'Startups': return '🚀';
       case 'IIT/IIM': return '🎓';

@@ -1,12 +1,21 @@
 export type ToxicityLevel = 'Low' | 'Medium' | 'High';
 
-export type PostCategory = 
+export type PostCategoryType = 
   | 'Startups'
   | 'AI/ML'
   | 'Hustle'
   | 'IIT/IIM'
   | 'Crypto'
   | 'Bro Culture';
+
+export interface PostCategory {
+  startups: boolean;
+  iitIim: boolean;
+  aiMl: boolean;
+  crypto: boolean;
+  hustle: boolean;
+  broCulture: boolean;
+}
 
 export type SpecialMode = 'FounderMeltdown' | 'FakeVCTakes' | 'IITBaitThread';
 

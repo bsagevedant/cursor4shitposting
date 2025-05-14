@@ -75,9 +75,9 @@ export default function Dashboard() {
         setUser(userData)
       } catch (error) {
         console.error('Error loading user:', {
-          message: error.message,
+          message: error instanceof Error ? error.message : 'Unknown error',
           details: error,
-          stack: error.stack
+          stack: error instanceof Error ? error.stack : undefined
         })
         // Optionally show an error state to the user
         setUser(null)

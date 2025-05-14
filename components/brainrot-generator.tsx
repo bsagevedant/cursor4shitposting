@@ -10,7 +10,7 @@ import { PostHistory } from '@/components/post-history';
 import { CustomTemplates } from '@/components/custom-templates';
 import { EngagementAnalytics } from '@/components/engagement-analytics';
 import { generateBrainrotPost } from '@/lib/post-generator';
-import { ToxicityLevel, PostCategory } from '@/lib/types';
+import { ToxicityLevel, PostCategory, PostCategoryType } from '@/lib/types';
 import { RefreshCw, Copy, Share2, History, Settings, BarChart2, Check, Linkedin, DollarSign, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePosts } from '@/hooks/use-posts';
@@ -38,12 +38,33 @@ export function BrainrotGenerator() {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
 
+  const handleSpecialMode = (mode: 'linkedin' | 'vc' | 'founder') => {
+    // TODO: Implement special mode generation
+    toast.info(`${mode} mode coming soon!`);
+  };
+
+  const mapSelectedCategoriesToTypes = (categories: PostCategory): PostCategoryType[] => {
+    const mappings: Record<keyof PostCategory, PostCategoryType> = {
+      startups: 'Startups',
+      iitIim: 'IIT/IIM',
+      aiMl: 'AI/ML',
+      crypto: 'Crypto',
+      hustle: 'Hustle',
+      broCulture: 'Bro Culture'
+    };
+
+    return Object.entries(categories)
+      .filter(([_, isSelected]) => isSelected)
+      .map(([key]) => mappings[key as keyof PostCategory]);
+  };
+
   const handleGenerate = () => {
     setIsGenerating(true);
     
     // Simulate a delay for the generation process
     setTimeout(() => {
-      const { post, author } = generateBrainrotPost(toxicityLevel, Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[]);
+      const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
+      const { post, author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
       setGeneratedPost(post);
       setAuthorName(author.name);
       setAuthorHandle(author.handle);
@@ -67,18 +88,19 @@ export function BrainrotGenerator() {
   };
 
   const generateHashtags = () => {
-    const hashtags = Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[];
-    return hashtags.map(category => {
-      switch(category) {
-        case 'startups': return '#startuplife';
-        case 'iitIim': return '#IITian';
-        case 'aiMl': return '#AIrevolution';
-        case 'crypto': return '#crypto';
-        case 'hustle': return '#hustlemode';
-        case 'broCulture': return '#techbro';
-        default: return '';
-      }
-    }).filter(Boolean);
+    const mappings: Record<keyof PostCategory, string> = {
+      startups: '#startuplife',
+      iitIim: '#IITian',
+      aiMl: '#AIrevolution',
+      crypto: '#crypto',
+      hustle: '#hustlemode',
+      broCulture: '#techbro'
+    };
+
+    return Object.entries(selectedCategories)
+      .filter(([_, isSelected]) => isSelected)
+      .map(([key]) => mappings[key as keyof PostCategory])
+      .filter(Boolean);
   };
 
   const shortenText = (text: string, maxLength: number = 280) => {
@@ -100,7 +122,7 @@ export function BrainrotGenerator() {
       }
     } catch (err) {
       console.error('Error sharing post:', err);
-      if (err.message === 'Popup blocked') {
+      if (err instanceof Error && err.message === 'Popup blocked') {
         toast.error('Please allow popups to share on X');
       } else {
         toast.error('Failed to share post. Please try again.');
@@ -114,12 +136,13 @@ export function BrainrotGenerator() {
 
     try {
       const hashtags = generateHashtags();
+      const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
       const result = await savePost({
         content: generatedPost,
         author_name: authorName,
         author_handle: authorHandle,
         toxicity_level: toxicityLevel,
-        categories: Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[],
+        categories: selectedCategoryTypes,
         is_favorite: false,
         engagement_score: 0,
         metadata: {
@@ -217,6 +240,11 @@ export function BrainrotGenerator() {
             </div>
 
             <div>
+              <h2 className="text-lg font-medium text-foreground mb-2">Toxicity Level</h2>
+              <ToxicitySlider value={toxicityLevel} onChange={setToxicityLevel} />
+            </div>
+
+            <div>
               <h2 className="text-lg font-medium text-foreground mb-2">Content Categories</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center space-x-2">
@@ -270,19 +298,22 @@ export function BrainrotGenerator() {
               </div>
             </div>
 
-            <div>
-              <h2 className="text-lg font-medium text-foreground mb-2">Toxicity Level</h2>
-              <ToxicitySlider value={toxicityLevel} onChange={setToxicityLevel} />
-            </div>
-
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handleGenerate}
-            >
-              Generate Shitpost
+            <Button className="w-full" size="lg" onClick={handleGenerate}>
+              Generate New Post
             </Button>
           </div>
+
+          {generatedPost && (
+            <div className="mt-8">
+              <h2 className="text-lg font-medium text-foreground mb-4">Generated Tweet</h2>
+              <TweetCard
+                content={generatedPost}
+                authorName={authorName}
+                authorHandle={authorHandle}
+                toxicityLevel={toxicityLevel}
+              />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="history">
@@ -290,21 +321,12 @@ export function BrainrotGenerator() {
         </TabsContent>
 
         <TabsContent value="settings">
-          <CustomTemplates />
+          <div className="grid gap-6">
+            <CustomTemplates />
+            <EngagementAnalytics />
+          </div>
         </TabsContent>
       </Tabs>
-
-      {generatedPost && (
-        <div className="mt-8">
-          <h2 className="text-lg font-medium text-foreground mb-4">Generated Tweet</h2>
-          <TweetCard
-            content={generatedPost}
-            authorName={authorName}
-            authorHandle={authorHandle}
-            toxicityLevel={toxicityLevel}
-          />
-        </div>
-      )}
     </div>
   );
 }

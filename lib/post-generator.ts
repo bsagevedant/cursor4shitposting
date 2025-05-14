@@ -1,10 +1,10 @@
-import { ToxicityLevel, PostCategory, Author } from '@/lib/types';
+import { ToxicityLevel, PostCategoryType, Author } from '@/lib/types';
 import { postTemplates } from '@/lib/post-templates';
 import { getRandomElement, getRandomNumber, capitalizeFirstLetter } from '@/lib/utils';
 
 export function generateBrainrotPost(
   toxicityLevel: ToxicityLevel, 
-  categories: PostCategory[]
+  categories: PostCategoryType[]
 ): { post: string; author: Author } {
   // Get random template for the selected toxicity level
   const template = getRandomElement(postTemplates.templates[toxicityLevel]);
