@@ -111,18 +111,18 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
+    <div className="min-h-screen bg-background">
+      <nav className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold">cursor4shitposting</h1>
+              <h1 className="text-xl font-bold text-foreground">cursor4shitposting</h1>
             </div>
             <div className="flex items-center gap-4">
               <Button variant="outline" onClick={() => router.push('/history')}>History</Button>
@@ -137,11 +137,11 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Main Generator Section */}
           <Card className="p-6">
-            <h2 className="text-2xl font-bold mb-6">Generate</h2>
+            <h2 className="text-2xl font-bold mb-6 text-foreground">Generate</h2>
             
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium mb-2">Toxicity Level</h3>
+                <h3 className="text-lg font-medium mb-2 text-foreground">Toxicity Level</h3>
                 <Slider
                   defaultValue={[50]}
                   max={100}
@@ -149,11 +149,11 @@ export default function Dashboard() {
                   onValueChange={(value) => setToxicityLevel(value[0])}
                   className="w-full"
                 />
-                <p className="text-sm text-gray-500 mt-1">Edgy, mildly offensive</p>
+                <p className="text-sm text-muted-foreground mt-1">Edgy, mildly offensive</p>
               </div>
 
               <div>
-                <h3 className="text-lg font-medium mb-2">Content Categories</h3>
+                <h3 className="text-lg font-medium mb-2 text-foreground">Content Categories</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -161,7 +161,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, startups: checked as boolean}))}
                     />
-                    <label>🚀 Startups</label>
+                    <label className="text-foreground">🚀 Startups</label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -169,7 +169,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, iitIim: checked as boolean}))}
                     />
-                    <label>🎓 IIT/IIM</label>
+                    <label className="text-foreground">🎓 IIT/IIM</label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -177,7 +177,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, aiMl: checked as boolean}))}
                     />
-                    <label>🤖 AI/ML</label>
+                    <label className="text-foreground">🤖 AI/ML</label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -185,7 +185,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, crypto: checked as boolean}))}
                     />
-                    <label>💰 Crypto</label>
+                    <label className="text-foreground">💰 Crypto</label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -193,7 +193,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, hustle: checked as boolean}))}
                     />
-                    <label>💪 Hustle</label>
+                    <label className="text-foreground">💪 Hustle</label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -201,7 +201,7 @@ export default function Dashboard() {
                       onCheckedChange={(checked) => 
                         setSelectedCategories(prev => ({...prev, broCulture: checked as boolean}))}
                     />
-                    <label>👊 Bro Culture</label>
+                    <label className="text-foreground">🏋️ Bro Culture</label>
                   </div>
                 </div>
               </div>

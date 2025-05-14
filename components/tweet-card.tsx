@@ -9,7 +9,7 @@ interface TweetCardProps {
   content: string;
   authorName: string;
   authorHandle: string;
-  toxicityLevel: ToxicityLevel;
+  toxicityLevel: 'Low' | 'Medium' | 'High';
 }
 
 export function TweetCard({
@@ -24,9 +24,9 @@ export function TweetCard({
 
   // Get toxicity level color
   const toxicityColors = {
-    Low: 'border-blue-500/20 bg-blue-500/5',
-    Medium: 'border-orange-500/20 bg-orange-500/5',
-    High: 'border-red-500/20 bg-red-500/5',
+    Low: 'border-blue-500/20 bg-blue-500/5 dark:border-blue-500/30 dark:bg-blue-500/10',
+    Medium: 'border-orange-500/20 bg-orange-500/5 dark:border-orange-500/30 dark:bg-orange-500/10',
+    High: 'border-red-500/20 bg-red-500/5 dark:border-red-500/30 dark:bg-red-500/10',
   };
 
   return (

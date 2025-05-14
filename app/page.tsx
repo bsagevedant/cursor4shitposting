@@ -12,6 +12,9 @@ export default function Home() {
           <p className="text-xl text-muted-foreground">
             Generate random, high-engagement shitposts crafted for Indian Tech Twitter
           </p>
+          <Link href="https://x.com/sagevedant" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+            @sagevedant
+          </Link>
           <div className="flex gap-4 justify-center">
             <Link href="/login">
               <Button size="lg">Sign In</Button>

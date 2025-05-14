@@ -11,17 +11,23 @@ import { CustomTemplates } from '@/components/custom-templates';
 import { EngagementAnalytics } from '@/components/engagement-analytics';
 import { generateBrainrotPost } from '@/lib/post-generator';
 import { ToxicityLevel, PostCategory } from '@/lib/types';
-import { RefreshCw, Copy, Share2, History, Settings, BarChart2, Check } from 'lucide-react';
+import { RefreshCw, Copy, Share2, History, Settings, BarChart2, Check, Linkedin, DollarSign, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePosts } from '@/hooks/use-posts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export function BrainrotGenerator() {
   const { savePost } = usePosts();
   const [toxicityLevel, setToxicityLevel] = useState<ToxicityLevel>('Medium');
-  const [selectedCategories, setSelectedCategories] = useState<PostCategory[]>([
-    'Startups', 'AI/ML', 'Hustle'
-  ]);
+  const [selectedCategories, setSelectedCategories] = useState<PostCategory>({
+    startups: true,
+    iitIim: true,
+    aiMl: true,
+    crypto: true,
+    hustle: true,
+    broCulture: true
+  });
   const [generatedPost, setGeneratedPost] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -37,7 +43,7 @@ export function BrainrotGenerator() {
     
     // Simulate a delay for the generation process
     setTimeout(() => {
-      const { post, author } = generateBrainrotPost(toxicityLevel, selectedCategories);
+      const { post, author } = generateBrainrotPost(toxicityLevel, Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[]);
       setGeneratedPost(post);
       setAuthorName(author.name);
       setAuthorHandle(author.handle);
@@ -61,19 +67,18 @@ export function BrainrotGenerator() {
   };
 
   const generateHashtags = () => {
-    const hashtags = selectedCategories.map(category => {
+    const hashtags = Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[];
+    return hashtags.map(category => {
       switch(category) {
-        case 'Startups': return '#startuplife';
-        case 'AI/ML': return '#AIrevolution';
-        case 'Hustle': return '#hustlemode';
-        case 'IIT/IIM': return '#IITian';
-        case 'Crypto': return '#crypto';
-        case 'Bro Culture': return '#techbro';
+        case 'startups': return '#startuplife';
+        case 'iitIim': return '#IITian';
+        case 'aiMl': return '#AIrevolution';
+        case 'crypto': return '#crypto';
+        case 'hustle': return '#hustlemode';
+        case 'broCulture': return '#techbro';
         default: return '';
       }
     }).filter(Boolean);
-
-    return hashtags.slice(0, 3).join(' '); // Limit to 3 hashtags
   };
 
   const shortenText = (text: string, maxLength: number = 280) => {
@@ -84,7 +89,7 @@ export function BrainrotGenerator() {
   const handleShare = async () => {
     try {
       const hashtags = generateHashtags();
-      const textToShare = shortenText(`${generatedPost}\n\n${hashtags}`);
+      const textToShare = shortenText(`${generatedPost}\n\n${hashtags.join(' ')}`);
       const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(textToShare)}`;
       
       const windowFeatures = 'width=550,height=420,scrollbars=yes,resizable=yes';
@@ -108,13 +113,13 @@ export function BrainrotGenerator() {
     setIsSaving(true);
 
     try {
-      const hashtags = generateHashtags().split(' ');
+      const hashtags = generateHashtags();
       const result = await savePost({
         content: generatedPost,
         author_name: authorName,
         author_handle: authorHandle,
         toxicity_level: toxicityLevel,
-        categories: selectedCategories,
+        categories: Object.keys(selectedCategories).filter(key => selectedCategories[key as keyof PostCategory]) as PostCategory[],
         is_favorite: false,
         engagement_score: 0,
         metadata: {
@@ -180,98 +185,103 @@ export function BrainrotGenerator() {
         </TabsList>
 
         <TabsContent value="generate" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Toxicity Level</h2>
-              <ToxicitySlider value={toxicityLevel} onChange={setToxicityLevel} />
-            </div>
-            
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Content Categories</h2>
-              <CategorySelector 
-                selectedCategories={selectedCategories} 
-                onChange={setSelectedCategories} 
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-center pt-4">
-            <Button 
-              onClick={handleGenerate} 
-              size="lg" 
-              className="relative group"
-              disabled={isGenerating}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 transition-transform duration-200 ${isGenerating ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-              Generate New Post
-            </Button>
-          </div>
-
-          {generatedPost && (
-            <div className="pt-6 space-y-4">
-              <TweetCard 
-                content={generatedPost} 
-                authorName={authorName}
-                authorHandle={authorHandle}
-                toxicityLevel={toxicityLevel}
-              />
-              
-              <div className="flex justify-center space-x-4">
+          <div className="grid gap-6">
+            <div>
+              <h2 className="text-lg font-medium text-foreground mb-2">Special Modes</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Button
                   variant="outline"
-                  size="lg"
-                  onClick={handleCopy}
-                  className="group relative"
-                  disabled={isCopying}
+                  className="flex items-center gap-2"
+                  onClick={() => handleSpecialMode('linkedin')}
                 >
-                  {isCopying ? (
-                    <div className="flex items-center">
-                      <Check className="mr-2 h-4 w-4 text-green-500" />
-                      Copied!
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <Copy className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
-                      Copy Post
-                    </div>
-                  )}
+                  <Linkedin className="h-4 w-4" />
+                  <span className="text-foreground">LinkedIn Mode</span>
                 </Button>
-                
                 <Button
                   variant="outline"
-                  size="lg"
-                  onClick={handleShare}
-                  className="group"
+                  className="flex items-center gap-2"
+                  onClick={() => handleSpecialMode('vc')}
                 >
-                  <Share2 className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
-                  Share on X
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-foreground">VC Mode</span>
                 </Button>
-
                 <Button
                   variant="outline"
-                  size="lg"
-                  onClick={handleSave}
-                  className="group relative"
-                  disabled={isSaving}
+                  className="flex items-center gap-2"
+                  onClick={() => handleSpecialMode('founder')}
                 >
-                  {isSaving ? (
-                    <div className="flex items-center">
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <BarChart2 className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
-                      Save & Track
-                    </div>
-                  )}
+                  <Rocket className="h-4 w-4" />
+                  <span className="text-foreground">Founder Mode</span>
                 </Button>
               </div>
             </div>
-          )}
 
-          <div className="pt-8">
-            <SpecialModeSelector toxicityLevel={toxicityLevel} />
+            <div>
+              <h2 className="text-lg font-medium text-foreground mb-2">Content Categories</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.startups}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, startups: checked as boolean}))}
+                  />
+                  <label className="text-foreground">🚀 Startups</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.iitIim}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, iitIim: checked as boolean}))}
+                  />
+                  <label className="text-foreground">🎓 IIT/IIM</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.aiMl}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, aiMl: checked as boolean}))}
+                  />
+                  <label className="text-foreground">🤖 AI/ML</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.crypto}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, crypto: checked as boolean}))}
+                  />
+                  <label className="text-foreground">💰 Crypto</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.hustle}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, hustle: checked as boolean}))}
+                  />
+                  <label className="text-foreground">💪 Hustle</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={selectedCategories.broCulture}
+                    onCheckedChange={(checked) => 
+                      setSelectedCategories(prev => ({...prev, broCulture: checked as boolean}))}
+                  />
+                  <label className="text-foreground">🏋️ Bro Culture</label>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-lg font-medium text-foreground mb-2">Toxicity Level</h2>
+              <ToxicitySlider value={toxicityLevel} onChange={setToxicityLevel} />
+            </div>
+
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleGenerate}
+            >
+              Generate Shitpost
+            </Button>
           </div>
         </TabsContent>
 
@@ -280,32 +290,21 @@ export function BrainrotGenerator() {
         </TabsContent>
 
         <TabsContent value="settings">
-          <div className="space-y-6">
-            <CustomTemplates />
-            <EngagementAnalytics
-              data={{
-                views: 1234,
-                likes: 567,
-                retweets: 89,
-                replies: 45,
-                engagement_rate: 4.5,
-                best_performing_time: '9:00 PM',
-                hourly_engagement: Array.from({ length: 24 }, (_, i) => ({
-                  hour: i,
-                  engagement: Math.random() * 10
-                })),
-                category_performance: [
-                  { category: 'Startups', engagement: 8.5 },
-                  { category: 'AI/ML', engagement: 7.2 },
-                  { category: 'Hustle', engagement: 6.8 },
-                  { category: 'IIT/IIM', engagement: 9.1 },
-                  { category: 'Crypto', engagement: 5.4 }
-                ]
-              }}
-            />
-          </div>
+          <CustomTemplates />
         </TabsContent>
       </Tabs>
+
+      {generatedPost && (
+        <div className="mt-8">
+          <h2 className="text-lg font-medium text-foreground mb-4">Generated Tweet</h2>
+          <TweetCard
+            content={generatedPost}
+            authorName={authorName}
+            authorHandle={authorHandle}
+            toxicityLevel={toxicityLevel}
+          />
+        </div>
+      )}
     </div>
   );
 }
