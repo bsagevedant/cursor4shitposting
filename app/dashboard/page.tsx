@@ -1,19 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle, CopyIcon, RefreshCw, Share2, UserCircle, LogOut, Crown, Lock } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { AlertCircle, CopyIcon, RefreshCw, Share2, UserCircle, LogOut, Crown, Lock, Sparkles, HistoryIcon, Info } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { generatePost } from '@/lib/gemini'
 import { useUser } from "@/hooks/use-user"
@@ -30,7 +32,19 @@ interface Tweet {
   platform: string
 }
 
+// Post type options with icons and descriptions
+const POST_TYPES = [
+  { value: "hot-take", label: "🔥 Hot Take", description: "Controversial opinions that spark debate" },
+  { value: "cringe-flex", label: "🥵 Cringe Flex", description: "Humble-bragging about achievements" },
+  { value: "tech-advice", label: "🤓 Tech Advice", description: "Opinionated tech and career tips" },
+  { value: "vc-bait", label: "💰 VC Bait", description: "Startups pitching for funding" },
+  { value: "edgy-roast", label: "🧂 Edgy Roast", description: "Sarcastic takes on tech culture" },
+  { value: "self-pity", label: "😭 Self-Pity", description: "Struggles of a tech worker" },
+  { value: "desi-dev-joke", label: "🇮🇳 Desi Dev Joke", description: "Jokes about Indian tech culture" }
+];
+
 export default function Dashboard() {
+  // State management
   const [postType, setPostType] = useState<string>("hot-take")
   const [toxicityLevel, setToxicityLevel] = useState<number>(5)
   const [topic, setTopic] = useState<string>("")
@@ -44,17 +58,54 @@ export default function Dashboard() {
   const [generatedTweet, setGeneratedTweet] = useState<Tweet | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [recentGenerations, setRecentGenerations] = useState<Tweet[]>([])
+  const [activeTab, setActiveTab] = useState("generator")
   
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useUser()
-  const { userStats, canGenerate, incrementGenerationCount, isPremium, freeGenerationsLeft, setPremiumStatus } = useUserStats()
+  const { userStats, canGenerate, incrementGenerationCount, isPremium, freeGenerationsLeft } = useUserStats()
 
+  // Load recent generations
+  useEffect(() => {
+    if (user) {
+      fetchRecentGenerations();
+    }
+  }, [user]);
+
+  const fetchRecentGenerations = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_generations')
+        .select('content, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const tweets = data.map(item => ({
+          content: item.content,
+          timestamp: new Date(item.created_at).toLocaleString(),
+          platform: "X for iPhone"
+        }));
+        setRecentGenerations(tweets);
+      }
+    } catch (err) {
+      console.error('Error fetching recent generations:', err);
+    }
+  };
+
+  // Handle sign out
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
+  // Handle tone selection
   const handleToneChange = (tone: keyof typeof tones) => {
     setTones(prev => ({
       ...prev,
@@ -62,6 +113,7 @@ export default function Dashboard() {
     }))
   }
 
+  // Handle copying content
   const handleCopyTweet = () => {
     if (generatedTweet) {
       navigator.clipboard.writeText(generatedTweet.content)
@@ -72,25 +124,42 @@ export default function Dashboard() {
     }
   }
 
+  // Get selected tones as array
   const getSelectedTones = (): string[] => {
     return Object.entries(tones)
       .filter(([_, isSelected]) => isSelected)
       .map(([tone]) => tone);
   }
 
+  // Get human-readable post type label
   const getPostTypeLabel = (type: string): string => {
-    switch(type) {
-      case "hot-take": return "Hot Take";
-      case "cringe-flex": return "Cringe Flex";
-      case "tech-advice": return "Tech Advice";
-      case "vc-bait": return "VC Bait";
-      case "edgy-roast": return "Edgy Roast";
-      case "self-pity": return "Self-Pity";
-      case "desi-dev-joke": return "Desi Dev Joke";
-      default: return type;
-    }
+    const postType = POST_TYPES.find(pt => pt.value === type);
+    return postType ? postType.label.replace(/^[\S\s]+ /, '') : type;
   }
 
+  // Save generation to history
+  const saveGenerationToHistory = async (content: string) => {
+    if (!user) return;
+    
+    try {
+      await supabase.from('user_generations').insert({
+        user_id: user.id,
+        content: content,
+        post_type: postType,
+        toxicity_level: toxicityLevel,
+        topic: topic || null,
+        tones: getSelectedTones(),
+        created_at: new Date().toISOString()
+      });
+      
+      // Refresh recent generations
+      fetchRecentGenerations();
+    } catch (err) {
+      console.error('Error saving generation:', err);
+    }
+  };
+
+  // Generate content with Gemini
   const handleGenerateTweet = async () => {
     // Check if user is authenticated
     if (!user) {
@@ -110,7 +179,6 @@ export default function Dashboard() {
         description: "You've used your 2 free generations. Upgrade to continue generating content.",
         variant: "destructive",
       })
-      // Redirect to pricing page when free generations are used up
       router.push('/pricing')
       return
     }
@@ -134,11 +202,17 @@ export default function Dashboard() {
         getSelectedTones()
       )
       
-      setGeneratedTweet({
+      const newTweet = {
         content,
         timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         platform: "X for iPhone"
-      })
+      };
+      
+      setGeneratedTweet(newTweet)
+      
+      // Save to history
+      await saveGenerationToHistory(content);
+      
     } catch (error) {
       console.error("Error generating tweet:", error)
       setError(error instanceof Error ? error.message : "Failed to generate content. Please try again.")
@@ -147,8 +221,8 @@ export default function Dashboard() {
     }
   }
 
-  // Add payment handling
-  const handleUpgrade = async () => {
+  // Upgrade to premium
+  const handleUpgrade = () => {
     if (!user) {
       toast({
         title: "Authentication required",
@@ -159,10 +233,10 @@ export default function Dashboard() {
       return
     }
 
-    // Redirect to pricing page
     router.push('/pricing')
   }
 
+  // Fallback content generation
   const handleFallbackGeneration = () => {
     // Fallback to mock content if Gemini API fails
     const getTweetContent = () => {
@@ -186,23 +260,26 @@ export default function Dashboard() {
       }
     };
     
-    setGeneratedTweet({
+    const newTweet = {
       content: getTweetContent(),
       timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       platform: "X for iPhone"
-    });
+    };
+    
+    setGeneratedTweet(newTweet);
+    saveGenerationToHistory(newTweet.content);
   }
 
   return (
     <div className="min-h-screen bg-background">
       
       {/* Header (Top Navigation Bar) */}
-      <header className="border-b border-border">
+      <header className="border-b border-border sticky top-0 z-10 bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-6">
               <Link href="/dashboard" className="text-xl font-bold flex items-center">
-                🧠 brainrot.ai
+                🧠 cursor4shitposting
               </Link>
               <nav className="hidden md:flex items-center space-x-4">
                 <Link href="/dashboard" className="font-medium text-primary">
@@ -219,21 +296,27 @@ export default function Dashboard() {
                 </Link>
               </nav>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-2">
+              {isPremium && (
+                <span className="bg-gradient-to-r from-amber-500 to-amber-300 text-black text-xs px-2 py-1 rounded-full font-semibold flex items-center">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Premium
+                </span>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="rounded-full" size="icon">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback>U</AvatarFallback>
+                      <AvatarFallback>{user?.email?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem className="flex items-center">
+                  <DropdownMenuItem className="flex items-center cursor-pointer">
                     <UserCircle className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                    <span>{user?.email}</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center" onClick={handleSignOut}>
+                  <DropdownMenuItem className="flex items-center cursor-pointer" onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Logout</span>
                   </DropdownMenuItem>
@@ -250,7 +333,7 @@ export default function Dashboard() {
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
+            <AlertDescription className="flex items-center">
               {error}
               <Button 
                 variant="link" 
@@ -263,278 +346,300 @@ export default function Dashboard() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Post Generator Card */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Generate Shitpost</CardTitle>
-                {!isPremium && (
-                  <div className="text-sm text-orange-500 font-medium">
-                    {freeGenerationsLeft > 0 
-                      ? `${freeGenerationsLeft} of 2 free generations remaining` 
-                      : 'You have used all your free generations'}
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Post Type */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Post Type</label>
-                  <Select value={postType} onValueChange={setPostType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select post type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hot-take">🔥 Hot Take</SelectItem>
-                      <SelectItem value="cringe-flex">🥵 Cringe Flex</SelectItem>
-                      <SelectItem value="tech-advice">🤓 Tech Advice</SelectItem>
-                      <SelectItem value="vc-bait">💰 VC Bait</SelectItem>
-                      <SelectItem value="edgy-roast">🧂 Edgy Roast</SelectItem>
-                      <SelectItem value="self-pity">😭 Self-Pity</SelectItem>
-                      <SelectItem value="desi-dev-joke">🇮🇳 Desi Dev Joke</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Toxicity Level */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-medium">Toxicity Level: {toxicityLevel}</label>
-                    <div className="text-xs text-muted-foreground">
-                      {toxicityLevel <= 3 ? "Friendly 🤝" : 
-                       toxicityLevel <= 7 ? "Mid brainrot 🧠" : 
-                       "Unfiltered hell 🧨"}
-                    </div>
-                  </div>
-                  <Slider
-                    value={[toxicityLevel]}
-                    min={0}
-                    max={10}
-                    step={1}
-                    onValueChange={(value) => setToxicityLevel(value[0])}
-                  />
-                </div>
-
-                {/* Topic Input */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Topic (Optional)</label>
-                  <Input 
-                    placeholder="e.g. Funding, React vs Svelte, NIT Trichy, Remote work" 
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                  />
-                </div>
-
-                {/* Tone Selector */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Tone</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="tone-sarcastic" 
-                        checked={tones.sarcastic}
-                        onCheckedChange={() => handleToneChange('sarcastic')}
-                      />
-                      <label htmlFor="tone-sarcastic" className="text-sm">Sarcastic</label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="tone-inspirational" 
-                        checked={tones.inspirational}
-                        onCheckedChange={() => handleToneChange('inspirational')}
-                      />
-                      <label htmlFor="tone-inspirational" className="text-sm">Inspirational</label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="tone-cringe" 
-                        checked={tones.cringe}
-                        onCheckedChange={() => handleToneChange('cringe')}
-                      />
-                      <label htmlFor="tone-cringe" className="text-sm">Cringe</label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="tone-angry" 
-                        checked={tones.angry}
-                        onCheckedChange={() => handleToneChange('angry')}
-                      />
-                      <label htmlFor="tone-angry" className="text-sm">Angry</label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="tone-startupy" 
-                        checked={tones.startupy}
-                        onCheckedChange={() => handleToneChange('startupy')}
-                      />
-                      <label htmlFor="tone-startupy" className="text-sm">Startup-y</label>
-                    </div>
-                  </div>
-                </div>
-
-                <Button 
-                  className="w-full" 
-                  size="lg" 
-                  onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      {!isPremium && freeGenerationsLeft === 0 ? 'Redirecting...' : 'Generating...'}
-                    </>
-                  ) : (
-                    <>
-                      {!isPremium && freeGenerationsLeft === 0 ? (
-                        <>
-                          <Crown className="mr-2 h-4 w-4" />
-                          Upgrade to Generate More
-                        </>
-                      ) : (
-                        <>🧠 Generate Brainrot</>
+        <Tabs defaultValue="generator" value={activeTab} onValueChange={setActiveTab} className="mb-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="generator" className="flex items-center justify-center">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generator
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center justify-center">
+              <HistoryIcon className="h-4 w-4 mr-2" />
+              Recent Posts
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="generator" className="pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Post Generator Card */}
+              <div className="lg:col-span-2">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Shitpost Generator</CardTitle>
+                      {!isPremium && (
+                        <div className="text-sm text-amber-500 font-medium flex items-center">
+                          <Info className="h-4 w-4 mr-1" />
+                          {freeGenerationsLeft > 0 
+                            ? `${freeGenerationsLeft} free generations left` 
+                            : 'No free generations left'}
+                        </div>
                       )}
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                    </div>
+                    <CardDescription>Create your viral Indian tech Twitter post</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Post Type */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Post Type</label>
+                      <Select value={postType} onValueChange={setPostType}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select post type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POST_TYPES.map(type => (
+                            <SelectItem key={type.value} value={type.value}>
+                              <div className="flex flex-col">
+                                <span>{type.label}</span>
+                                <span className="text-xs text-muted-foreground">{type.description}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-            {/* Output Section (Post Preview) */}
-            {generatedTweet && (
-              <Card className="mt-6">
-                <CardContent className="pt-6">
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white">
-                        🧠
+                    {/* Toxicity Level */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium">Toxicity Level: {toxicityLevel}</label>
+                        <div className="text-xs text-muted-foreground">
+                          {toxicityLevel <= 3 ? "Friendly 🤝" : 
+                           toxicityLevel <= 7 ? "Mid brainrot 🧠" : 
+                           "Unfiltered hell 🧨"}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold">Brainrot User</span>
-                          <span className="text-muted-foreground">@brainrot_ai</span>
-                        </div>
-                        <p className="mt-2 whitespace-pre-line">{generatedTweet.content}</p>
-                        <div className="mt-2 text-muted-foreground text-sm">
-                          {generatedTweet.timestamp} · {generatedTweet.platform}
-                        </div>
+                      <Slider
+                        value={[toxicityLevel]}
+                        min={0}
+                        max={10}
+                        step={1}
+                        onValueChange={(value) => setToxicityLevel(value[0])}
+                        className="py-2"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Mild</span>
+                        <span>Spicy</span>
+                        <span>Toxic</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-4 flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={handleCopyTweet}>
-                      <CopyIcon className="mr-2 h-4 w-4" />
-                      Copy
-                    </Button>
+
+                    {/* Topic Input */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Topic (Optional)</label>
+                      <Input 
+                        placeholder="e.g. Funding, React vs Svelte, Remote work, Startups" 
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Tone Selector */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Tone (Optional)</label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <TooltipProvider>
+                          {Object.entries(tones).map(([tone, isChecked]) => (
+                            <Tooltip key={tone}>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id={`tone-${tone}`} 
+                                    checked={isChecked}
+                                    onCheckedChange={() => handleToneChange(tone as keyof typeof tones)}
+                                  />
+                                  <label 
+                                    htmlFor={`tone-${tone}`} 
+                                    className="text-sm cursor-pointer capitalize"
+                                  >
+                                    {tone}
+                                  </label>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{getToneDescription(tone)}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </TooltipProvider>
+                      </div>
+                    </div>
+
                     <Button 
-                      variant="outline" 
-                      size="sm" 
+                      className="w-full" 
+                      size="lg" 
                       onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
+                      disabled={isGenerating}
                     >
-                      {!isPremium && freeGenerationsLeft === 0 ? (
+                      {isGenerating ? (
                         <>
-                          <Crown className="mr-2 h-4 w-4" />
-                          Upgrade
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Generating...
                         </>
                       ) : (
                         <>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Regenerate
+                          {!isPremium && freeGenerationsLeft === 0 ? (
+                            <>
+                              <Crown className="mr-2 h-4 w-4" />
+                              Upgrade to Generate More
+                            </>
+                          ) : (
+                            <>🧠 Generate Shitpost</>
+                          )}
                         </>
                       )}
                     </Button>
-                    <Button variant="outline" size="sm">
-                      <Share2 className="mr-2 h-4 w-4" />
-                      Post to X
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                  </CardContent>
+                </Card>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Recently Generated Posts */}
+                {/* Output Section (Post Preview) */}
+                {generatedTweet && (
+                  <Card className="mt-6 border-primary/20">
+                    <CardHeader>
+                      <CardTitle className="text-base">Generated Post</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="border rounded-lg p-4 bg-card shadow-sm">
+                        <div className="flex items-start space-x-3">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl">
+                            {user?.email?.charAt(0).toUpperCase() || '🧠'}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold">You</span>
+                              <span className="text-muted-foreground">@user{Math.floor(Math.random() * 1000)}</span>
+                              <span className="text-xs text-muted-foreground">· {generatedTweet.timestamp}</span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-line">{generatedTweet.content}</p>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Button variant="outline" size="sm" onClick={handleCopyTweet} className="flex items-center">
+                                <CopyIcon className="mr-1.5 h-3.5 w-3.5" />
+                                Copy
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
+                                disabled={isGenerating}
+                                className="flex items-center"
+                              >
+                                {!isPremium && freeGenerationsLeft === 0 ? (
+                                  <>
+                                    <Crown className="mr-1.5 h-3.5 w-3.5" />
+                                    Upgrade
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                    Regenerate
+                                  </>
+                                )}
+                              </Button>
+                              <Button variant="outline" size="sm" className="flex items-center">
+                                <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                                Share
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Sidebar */}
+              <div className="space-y-6">
+                {/* Feature Card */}
+                <Card className="bg-card/50 border-dashed">
+                  <CardHeader>
+                    <CardTitle className="text-base">Gemini AI Powered</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Our cutting-edge AI generates high-quality shitposts tailored to Indian tech Twitter culture.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col items-center p-2 border rounded-md bg-card/50">
+                          <Sparkles className="h-5 w-5 text-primary mb-1" />
+                          <span className="text-xs font-medium">Smart Generation</span>
+                        </div>
+                        <div className="flex flex-col items-center p-2 border rounded-md bg-card/50">
+                          <Share2 className="h-5 w-5 text-primary mb-1" />
+                          <span className="text-xs font-medium">Easy Sharing</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Upgrade Card */}
+                <Card className="bg-gradient-to-br from-purple-900 to-indigo-900 text-white">
+                  <CardContent className="pt-6">
+                    {isPremium ? (
+                      <>
+                        <h3 className="text-lg font-semibold mb-2">Premium Active</h3>
+                        <p className="text-sm text-purple-200 mb-4">You have unlimited shitpost generations and access to all premium features.</p>
+                        <div className="bg-white/10 p-3 rounded-md text-center">
+                          <span className="text-xs">Premium Status: Active</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-semibold mb-2">Upgrade to Pro</h3>
+                        <p className="text-sm text-purple-200 mb-4">Generate unlimited shitposts, access exclusive templates, and post directly to X.</p>
+                        <Button 
+                          variant="secondary" 
+                          className="w-full"
+                          onClick={handleUpgrade}
+                        >
+                          <Crown className="mr-2 h-4 w-4" />
+                          Upgrade Now
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="history" className="pt-4">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Posts</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="border-l-2 border-primary pl-4 py-2">
-                  <p className="text-sm">Just deployed my first SaaS in 48 hours. Making $0 MRR but my LinkedIn post got 500 likes so basically I'm killing it 💪</p>
-                  <p className="text-xs text-muted-foreground mt-1">2 hours ago</p>
-                </div>
-                <div className="border-l-2 border-primary pl-4 py-2">
-                  <p className="text-sm">Indian LinkedIn influencers writing a post about how they rejected Google to join a "mission-driven" startup that nobody has heard of</p>
-                  <p className="text-xs text-muted-foreground mt-1">Yesterday</p>
-                </div>
-                <div className="border-l-2 border-primary pl-4 py-2">
-                  <p className="text-sm">POV: You're watching a YouTube tutorial from an Indian dev who explains complex algorithms better than your entire CS degree</p>
-                  <p className="text-xs text-muted-foreground mt-1">2 days ago</p>
-                </div>
-                <Button variant="ghost" className="w-full mt-2" size="sm">
-                  View History
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Leaderboard */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Leaderboard</CardTitle>
+                <CardTitle>Your Recent Posts</CardTitle>
+                <CardDescription>History of your generated content</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Most Used Templates</h3>
-                    <ol className="space-y-1 list-decimal list-inside text-sm">
-                      <li>🔥 Hot Take</li>
-                      <li>🧂 Edgy Roast</li>
-                      <li>😭 Self-Pity</li>
-                    </ol>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">Most Toxic Posts</h3>
-                    <ol className="space-y-1 list-decimal list-inside text-sm">
-                      <li>"Web3 is just..."</li>
-                      <li>"India's tech education..."</li>
-                      <li>"FAANG engineers who..."</li>
-                    </ol>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Upgrade Card */}
-            <Card className="bg-gradient-to-br from-purple-800 to-indigo-900 text-white">
-              <CardContent className="pt-6">
-                {isPremium ? (
-                  <>
-                    <h3 className="text-lg font-semibold mb-2">Premium Active</h3>
-                    <p className="text-sm text-purple-200 mb-4">You have unlimited brainrot generations and access to all premium features.</p>
-                    <div className="bg-white/10 p-3 rounded-md text-center">
-                      <span className="text-xs">Premium Status: Active</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="text-lg font-semibold mb-2">Upgrade to Pro</h3>
-                    <p className="text-sm text-purple-200 mb-4">Generate unlimited brainrot, access exclusive templates, and post directly to X.</p>
-                    <Button 
-                      variant="secondary" 
-                      className="w-full"
-                      onClick={handleUpgrade}
-                    >
-                      Upgrade Now
+                {recentGenerations.length > 0 ? (
+                  <div className="space-y-6">
+                    {recentGenerations.map((tweet, index) => (
+                      <div key={index} className="border-l-2 border-primary pl-4 py-2">
+                        <p className="whitespace-pre-line">{tweet.content}</p>
+                        <div className="flex justify-between items-center mt-2">
+                          <p className="text-xs text-muted-foreground">{tweet.timestamp}</p>
+                          <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(tweet.content)}>
+                            <CopyIcon className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Button variant="outline" className="w-full" onClick={() => router.push('/history')}>
+                      View Full History
                     </Button>
-                  </>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No posts generated yet</p>
+                    <Button variant="outline" className="mt-4" onClick={() => setActiveTab("generator")}>
+                      Create Your First Post
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer */}
@@ -552,4 +657,16 @@ export default function Dashboard() {
       </footer>
     </div>
   )
+}
+
+// Helper function for tone descriptions
+function getToneDescription(tone: string): string {
+  switch(tone) {
+    case 'sarcastic': return "Add sarcastic wit and irony to your post";
+    case 'inspirational': return "Add motivational, uplifting elements";
+    case 'cringe': return "Deliberately over-the-top or awkward";
+    case 'angry': return "Add frustration and intensity";
+    case 'startupy': return "Use startup and tech buzzwords";
+    default: return "Adjust the tone of your generated post";
+  }
 } 
