@@ -4,25 +4,42 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
+import { GeneratePostButton } from "@/components/generate-post-button";
 
 export default function GeneratePost() {
   const [prompt, setPrompt] = useState('');
   const [generatedPost, setGeneratedPost] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      // TODO: Implement actual post generation logic
-      // This is a placeholder response
-      const response = await new Promise(resolve => 
-        setTimeout(() => resolve("This is a sample generated post based on your prompt."), 1000)
-      );
-      setGeneratedPost(response as string);
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate post');
+      }
+      
+      setGeneratedPost(data.generatedPost);
     } catch (error) {
       console.error('Error generating post:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate post",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -48,13 +65,22 @@ export default function GeneratePost() {
                 className="min-h-[100px]"
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={isLoading || !prompt.trim()}
-            >
-              {isLoading ? 'Generating...' : 'Generate Post'}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                type="submit" 
+                className="flex-1"
+                disabled={isLoading || !prompt.trim()}
+              >
+                {isLoading ? 'Generating...' : 'Generate Post'}
+              </Button>
+              {generatedPost && (
+                <GeneratePostButton
+                  prompt={prompt}
+                  onPostGenerated={setGeneratedPost}
+                  variant="outline"
+                />
+              )}
+            </div>
           </form>
 
           {generatedPost && (

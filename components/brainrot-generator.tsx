@@ -11,14 +11,27 @@ import { CustomTemplates } from '@/components/custom-templates';
 import { EngagementAnalytics } from '@/components/engagement-analytics';
 import { generateBrainrotPost } from '@/lib/post-generator';
 import { ToxicityLevel, PostCategory, PostCategoryType } from '@/lib/types';
-import { RefreshCw, Copy, Share2, History, Settings, BarChart2, Check, Linkedin, DollarSign, Rocket } from 'lucide-react';
+import { RefreshCw, Copy, Share2, History, Settings, BarChart2, Check, Linkedin, DollarSign, Rocket, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePosts } from '@/hooks/use-posts';
+import { useUserStats } from '@/hooks/use-user-stats';
+import { useUser } from '@/hooks/use-user';
+import { PremiumUpgrade } from '@/components/premium-upgrade';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import Script from 'next/script';
+
+// Add Razorpay type declaration
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export function BrainrotGenerator() {
+  const { user } = useUser();
   const { savePost } = usePosts();
+  const { userStats, canGenerate, incrementGenerationCount, isPremium, freeGenerationsLeft, setPremiumStatus } = useUserStats();
   const [toxicityLevel, setToxicityLevel] = useState<ToxicityLevel>('Medium');
   const [selectedCategories, setSelectedCategories] = useState<PostCategory>({
     startups: true,
@@ -37,6 +50,7 @@ export function BrainrotGenerator() {
   const [activeTab, setActiveTab] = useState('generate');
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
 
   const handleSpecialMode = (mode: 'linkedin' | 'vc' | 'founder') => {
     // TODO: Implement special mode generation
@@ -58,18 +72,45 @@ export function BrainrotGenerator() {
       .map(([key]) => mappings[key as keyof PostCategory]);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    // If user isn't authenticated, show login message
+    if (!user) {
+      toast.error('Please sign in to generate posts');
+      return;
+    }
+
+    // Check if user can generate more posts
+    if (!canGenerate()) {
+      toast.error('You have used all your free generations. Please upgrade to premium.');
+      setActiveTab('settings');
+      return;
+    }
+
     setIsGenerating(true);
     
-    // Simulate a delay for the generation process
-    setTimeout(() => {
-      const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
-      const { post, author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
-      setGeneratedPost(post);
-      setAuthorName(author.name);
-      setAuthorHandle(author.handle);
+    try {
+      // Increment generation count for non-premium users
+      if (!isPremium) {
+        const success = await incrementGenerationCount();
+        if (!success) {
+          throw new Error('Failed to increment generation count');
+        }
+      }
+      
+      // Simulate a delay for the generation process
+      setTimeout(() => {
+        const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
+        const { post, author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
+        setGeneratedPost(post);
+        setAuthorName(author.name);
+        setAuthorHandle(author.handle);
+        setIsGenerating(false);
+      }, 600);
+    } catch (error) {
+      console.error('Error generating post:', error);
+      toast.error('Failed to generate post. Please try again.');
       setIsGenerating(false);
-    }, 600);
+    }
   };
 
   const handleCopy = async () => {
@@ -175,6 +216,96 @@ export function BrainrotGenerator() {
     }
   };
 
+  // Add a function to handle direct upgrade
+  const handleUpgrade = async () => {
+    if (!user) {
+      toast.error('Please sign in to upgrade to premium');
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      // Create order for monthly plan (default)
+      const response = await fetch('/api/payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: 'monthly' }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create payment order');
+      }
+
+      // Open Razorpay checkout
+      const options = {
+        key: data.key,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'cursor4shitposting',
+        description: 'Monthly Premium Subscription',
+        order_id: data.orderId,
+        handler: async function (response: any) {
+          try {
+            // Verify payment
+            const verifyResponse = await fetch('/api/payment/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                validity: 30 // Monthly plan
+              }),
+            });
+
+            const verifyData = await verifyResponse.json();
+            
+            if (!verifyResponse.ok) {
+              throw new Error(verifyData.error || 'Payment verification failed');
+            }
+
+            // Update premium status
+            const expiryDate = new Date(verifyData.expiryDate);
+            await setPremiumStatus(expiryDate);
+
+            toast.success('Payment successful! You now have unlimited generations.');
+          } catch (error) {
+            console.error('Verification error:', error);
+            toast.error('Payment verification failed. Please contact support.');
+          } finally {
+            setIsGenerating(false);
+          }
+        },
+        prefill: {
+          name: user.user_metadata?.full_name || '',
+          email: user.email || '',
+        },
+        theme: {
+          color: '#6366F1',
+        },
+        modal: {
+          ondismiss: function() {
+            setIsGenerating(false);
+          }
+        }
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast.error('Failed to initiate payment. Please try again later.');
+      setIsGenerating(false);
+    }
+  };
+
   // Generate a post on first render
   useEffect(() => {
     handleGenerate();
@@ -182,6 +313,10 @@ export function BrainrotGenerator() {
 
   return (
     <div className="space-y-8 py-8">
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        onLoad={() => setRazorpayLoaded(true)}
+      />
       <header className="text-center space-y-4">
         <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-orange-500 text-transparent bg-clip-text">
           cursor4shitposting
@@ -189,6 +324,23 @@ export function BrainrotGenerator() {
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
           Generate high-engagement, satirical shitposts crafted for Indian Tech Twitter
         </p>
+        {!isPremium && (
+          <div className="flex items-center justify-center space-x-2 text-sm">
+            <span className="text-orange-500 font-medium">
+              {freeGenerationsLeft > 0 
+                ? `You have ${freeGenerationsLeft} free generations left` 
+                : 'You have used all your free generations'}
+            </span>
+            <Button 
+              variant="link" 
+              className="h-auto p-0 text-sm" 
+              onClick={handleUpgrade}
+              disabled={!razorpayLoaded}
+            >
+              {freeGenerationsLeft > 0 ? 'View Premium Plans' : 'Upgrade to Premium'}
+            </Button>
+          </div>
+        )}
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -216,7 +368,9 @@ export function BrainrotGenerator() {
                   variant="outline"
                   className="flex items-center gap-2"
                   onClick={() => handleSpecialMode('linkedin')}
+                  disabled={!isPremium}
                 >
+                  {!isPremium && <Lock className="h-3 w-3 mr-1 text-orange-500" />}
                   <Linkedin className="h-4 w-4" />
                   <span className="text-foreground">LinkedIn Mode</span>
                 </Button>
@@ -224,7 +378,9 @@ export function BrainrotGenerator() {
                   variant="outline"
                   className="flex items-center gap-2"
                   onClick={() => handleSpecialMode('vc')}
+                  disabled={!isPremium}
                 >
+                  {!isPremium && <Lock className="h-3 w-3 mr-1 text-orange-500" />}
                   <DollarSign className="h-4 w-4" />
                   <span className="text-foreground">VC Mode</span>
                 </Button>
@@ -232,11 +388,18 @@ export function BrainrotGenerator() {
                   variant="outline"
                   className="flex items-center gap-2"
                   onClick={() => handleSpecialMode('founder')}
+                  disabled={!isPremium}
                 >
+                  {!isPremium && <Lock className="h-3 w-3 mr-1 text-orange-500" />}
                   <Rocket className="h-4 w-4" />
                   <span className="text-foreground">Founder Mode</span>
                 </Button>
               </div>
+              {!isPremium && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Special modes are available for premium users only
+                </p>
+              )}
             </div>
 
             <div>
@@ -298,8 +461,18 @@ export function BrainrotGenerator() {
               </div>
             </div>
 
-            <Button className="w-full" size="lg" onClick={handleGenerate}>
-              Generate New Post
+            <Button 
+              className="w-full" 
+              size="lg" 
+              onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerate}
+              disabled={isGenerating || (!isPremium && freeGenerationsLeft === 0 && !razorpayLoaded)}
+            >
+              {isGenerating 
+                ? 'Processing...' 
+                : !isPremium && freeGenerationsLeft === 0
+                  ? 'Upgrade to Generate More'
+                  : 'Generate New Post'
+              }
             </Button>
           </div>
 
@@ -322,6 +495,7 @@ export function BrainrotGenerator() {
 
         <TabsContent value="settings">
           <div className="grid gap-6">
+            <PremiumUpgrade />
             <CustomTemplates />
             <EngagementAnalytics />
           </div>

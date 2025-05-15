@@ -174,6 +174,34 @@ export interface Database {
           created_at?: string
         }
       }
+      user_stats: {
+        Row: {
+          id: string
+          user_id: string
+          generation_count: number
+          premium_until: string | null
+          last_generated_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          generation_count?: number
+          premium_until?: string | null
+          last_generated_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          generation_count?: number
+          premium_until?: string | null
+          last_generated_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

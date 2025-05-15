@@ -15,7 +15,7 @@ export default function Home() {
           <Link href="https://x.com/sagevedant" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
             @sagevedant
           </Link>
-          <div className="flex gap-4 justify-center">
+          <div className="flex gap-4 justify-center flex-wrap">
             <Link href="/login">
               <Button size="lg">Sign In</Button>
             </Link>

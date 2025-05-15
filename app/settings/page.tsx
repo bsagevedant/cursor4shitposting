@@ -12,6 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/hooks/use-user';
+import { PremiumUpgrade } from '@/components/premium-upgrade';
+import { useUserStats } from '@/hooks/use-user-stats';
 
 interface UserSettings {
   display_name: string;
@@ -25,6 +27,7 @@ interface UserSettings {
 export default function SettingsPage() {
   const router = useRouter();
   const { user } = useUser();
+  const { isPremium } = useUserStats();
   const [settings, setSettings] = useState<UserSettings>({
     display_name: '',
     default_author_name: '',
@@ -116,6 +119,37 @@ export default function SettingsPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="space-y-6">
+          {!isPremium && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Premium Subscription</CardTitle>
+                <CardDescription>
+                  Upgrade to premium for unlimited post generations and special features
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PremiumUpgrade />
+              </CardContent>
+            </Card>
+          )}
+          {isPremium && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Premium Status</CardTitle>
+                <CardDescription>
+                  You are currently on a premium plan with unlimited generations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-green-50 p-4 rounded-md border border-green-200">
+                  <p className="text-green-800 font-medium">
+                    Your account has premium status. Enjoy unlimited post generations and all premium features!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Profile Settings</CardTitle>
