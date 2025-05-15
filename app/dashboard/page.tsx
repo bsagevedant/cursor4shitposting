@@ -25,6 +25,8 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert"
+import { WelcomeModal } from "@/components/welcome-modal"
+import { CreditUpgradeModal } from "@/components/credit-upgrade-modal"
 
 interface Tweet {
   content: string
@@ -61,6 +63,10 @@ export default function Dashboard() {
   const [recentGenerations, setRecentGenerations] = useState<Tweet[]>([])
   const [activeTab, setActiveTab] = useState("generator")
   
+  // Free credit system state
+  const [isNewUser, setIsNewUser] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useUser()
@@ -72,6 +78,16 @@ export default function Dashboard() {
       fetchRecentGenerations();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user && userStats) {
+      const isNew = userStats.generation_count === 0;
+      
+      const hasSeenWelcomeMessage = localStorage.getItem('hasSeenWelcome');
+      
+      setIsNewUser(isNew && !hasSeenWelcomeMessage);
+    }
+  }, [user, userStats]);
 
   const fetchRecentGenerations = async () => {
     if (!user) return;
@@ -97,6 +113,15 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Error fetching recent generations:', err);
     }
+  };
+
+  // Modal handlers
+  const handleWelcomeClose = () => {
+    localStorage.setItem('hasSeenWelcome', 'true');
+  };
+
+  const handleUpgradeModalClose = () => {
+    setShowUpgradeModal(false);
   };
 
   // Handle sign out
@@ -174,12 +199,8 @@ export default function Dashboard() {
 
     // Check if user can generate more posts
     if (!canGenerate()) {
-      toast({
-        title: "Free limit reached",
-        description: "You've used your 2 free generations. Upgrade to continue generating content.",
-        variant: "destructive",
-      })
-      router.push('/pricing')
+      // Show the upgrade modal instead of redirecting
+      setShowUpgradeModal(true)
       return
     }
 
@@ -192,6 +213,14 @@ export default function Dashboard() {
         const success = await incrementGenerationCount()
         if (!success) {
           throw new Error('Failed to increment generation count')
+        }
+        
+        // If this was the last free generation, show a toast notification
+        if (freeGenerationsLeft <= 1) {
+          toast({
+            title: "Last free credit used",
+            description: "You've used your last free credit. Upgrade for unlimited posts!",
+          })
         }
       }
       
@@ -367,11 +396,20 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       <CardTitle>Shitpost Generator</CardTitle>
                       {!isPremium && (
-                        <div className="text-sm text-amber-500 font-medium flex items-center">
-                          <Info className="h-4 w-4 mr-1" />
-                          {freeGenerationsLeft > 0 
-                            ? `${freeGenerationsLeft} free generations left` 
-                            : 'No free generations left'}
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-medium flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full">
+                            {freeGenerationsLeft > 0 ? (
+                              <>
+                                <span className="text-amber-500 font-bold">{freeGenerationsLeft}/2</span> 
+                                <span>free credits</span>
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-3.5 w-3.5 text-destructive" />
+                                <span className="text-destructive">Credits used</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -480,7 +518,7 @@ export default function Dashboard() {
                           {!isPremium && freeGenerationsLeft === 0 ? (
                             <>
                               <Crown className="mr-2 h-4 w-4" />
-                              Upgrade to Generate More
+                              Upgrade
                             </>
                           ) : (
                             <>🧠 Generate Shitpost</>
@@ -586,8 +624,18 @@ export default function Dashboard() {
                       </>
                     ) : (
                       <>
-                        <h3 className="text-lg font-semibold mb-2">Upgrade to Pro</h3>
-                        <p className="text-sm text-purple-200 mb-4">Generate unlimited shitposts, access exclusive templates, and post directly to X.</p>
+                        <h3 className="text-lg font-semibold mb-2 flex items-center">
+                          {freeGenerationsLeft > 0 ? (
+                            <>Free Credits: <span className="ml-1 text-amber-300">{freeGenerationsLeft}/2</span></>
+                          ) : (
+                            <>Upgrade to Pro</>
+                          )}
+                        </h3>
+                        <p className="text-sm text-purple-200 mb-4">
+                          {freeGenerationsLeft > 0 
+                            ? `You have ${freeGenerationsLeft} free generation${freeGenerationsLeft > 1 ? 's' : ''} left. Upgrade for unlimited access.` 
+                            : `You've used all your free credits. Upgrade to continue generating viral content.`}
+                        </p>
                         <Button 
                           variant="secondary" 
                           className="w-full"
@@ -655,6 +703,20 @@ export default function Dashboard() {
           </div>
         </div>
       </footer>
+
+      {/* Modals */}
+      {isNewUser && (
+        <WelcomeModal 
+          isNewUser={isNewUser} 
+          freeCredits={2} 
+          onClose={handleWelcomeClose}
+        />
+      )}
+      
+      <CreditUpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={handleUpgradeModalClose}
+      />
     </div>
   )
 }
