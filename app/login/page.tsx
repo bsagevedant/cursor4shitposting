@@ -1,113 +1,198 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, Loader2 } from "lucide-react"
+import z from 'zod'
 
-function LoginForm() {
+// Login form validation schema
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+});
+
+export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [loginAttempts, setLoginAttempts] = useState(0)
+  const [isRateLimited, setIsRateLimited] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
 
+  // Check and reset rate limiting
   useEffect(() => {
-    const msg = searchParams.get('message')
-    if (msg) setMessage(msg)
-  }, [searchParams])
+    const storedAttempts = localStorage.getItem('loginAttempts');
+    const storedTimestamp = localStorage.getItem('loginAttemptsTimestamp');
+    
+    if (storedAttempts && storedTimestamp) {
+      const attempts = parseInt(storedAttempts);
+      const timestamp = parseInt(storedTimestamp);
+      const now = Date.now();
+      
+      // If it's been more than 15 minutes since the first attempt, reset counter
+      if (now - timestamp > 15 * 60 * 1000) {
+        localStorage.removeItem('loginAttempts');
+        localStorage.removeItem('loginAttemptsTimestamp');
+        setLoginAttempts(0);
+        setIsRateLimited(false);
+      } else if (attempts >= 5) {
+        // If there have been 5 or more attempts in the last 15 minutes, rate limit
+        setIsRateLimited(true);
+        // Calculate remaining time
+        const remainingTime = Math.ceil((15 * 60 * 1000 - (now - timestamp)) / 60000);
+        setError(`Too many login attempts. Please try again in ${remainingTime} minutes.`);
+      } else {
+        setLoginAttempts(attempts);
+      }
+    }
+  }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Handle login form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Clear previous errors
+    setError(null);
+    
+    // Check if rate limited
+    if (isRateLimited) {
+      return;
+    }
+    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Validate form data
+      const validationResult = loginSchema.safeParse({ email, password });
+      if (!validationResult.success) {
+        const errors = validationResult.error.format();
+        const errorMessage = errors.email?._errors[0] || errors.password?._errors[0] || 'Invalid input';
+        setError(errorMessage);
+        return;
+      }
+      
+      setIsLoading(true);
+      
+      // Increment login attempts counter
+      const newAttemptCount = loginAttempts + 1;
+      setLoginAttempts(newAttemptCount);
+      
+      // Store login attempts in localStorage with timestamp of first attempt
+      if (newAttemptCount === 1) {
+        localStorage.setItem('loginAttemptsTimestamp', Date.now().toString());
+      }
+      localStorage.setItem('loginAttempts', newAttemptCount.toString());
+      
+      // Rate limit after 5 attempts
+      if (newAttemptCount >= 5) {
+        setIsRateLimited(true);
+        setError('Too many login attempts. Please try again in 15 minutes.');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Attempt to sign in
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
-      if (error) throw error
+      });
       
-      // Redirect to the dashboard
-      router.replace('/dashboard')
-    } catch (error: any) {
-      setError(error.message)
+      if (error) {
+        // Use a generic error message for security
+        setError('Invalid email or password. Please try again.');
+        return;
+      }
+      
+      // Reset login attempts on successful login
+      localStorage.removeItem('loginAttempts');
+      localStorage.removeItem('loginAttemptsTimestamp');
+      
+      // Redirect to dashboard
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An unexpected error occurred. Please try again later.');
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold">
-            Sign in to your account
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          {error && (
-            <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-          {message && (
-            <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded">
-              {message}
-            </div>
-          )}
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <input
-                type="email"
-                required
-                className="appearance-none rounded-t-md relative block w-full px-3 py-2 border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-b-md relative block w-full px-3 py-2 border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Button
-              type="submit"
-              className="w-full"
-              size="lg"
-            >
-              Sign in
-            </Button>
-          </div>
-        </form>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <Link 
-            href="/signup" 
-            className="text-primary hover:text-primary/80"
+          <h1 className="text-4xl font-bold mb-2">🧠 cursor4shitposting</h1>
+          <p className="text-muted-foreground">Sign in to your account</p>
+        </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+              disabled={isLoading || isRateLimited}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link href="#" className="text-sm text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              disabled={isLoading || isRateLimited}
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={isLoading || isRateLimited}
           >
-            Don't have an account? Sign up
-          </Link>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              'Sign In'
+            )}
+          </Button>
+        </form>
+
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">
+            Don't have an account?{' '}
+            <Link href="/signup" className="text-primary hover:underline">
+              Sign up
+            </Link>
+          </p>
         </div>
       </div>
     </div>
-  )
-}
-
-export default function Login() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
   )
 } 

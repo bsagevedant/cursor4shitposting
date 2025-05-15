@@ -1,10 +1,16 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Get API key - using hardcoded API key
-const getApiKey = (): string => {
-  // Working API key for demonstration
-  return "AIzaSyDx91LRh-gKMxhC4yxdJ6Jm-T2R3Ev-RnY";
-};
+// Get API key from environment variables
+function getApiKey(): string {
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  
+  if (!apiKey) {
+    console.error('GEMINI_API_KEY is not defined in environment variables');
+    throw new Error('Missing Gemini API key. Please set GEMINI_API_KEY in your environment variables.');
+  }
+  
+  return apiKey;
+}
 
 // Initialize the Gemini model
 export const initializeGemini = () => {
@@ -15,52 +21,40 @@ export const initializeGemini = () => {
 
 // Generate post content based on parameters
 export async function generatePost(
-  postType: string, 
+  postType: string,
   toxicityLevel: number,
   topic: string | null,
   tones: string[]
 ): Promise<string> {
-  const model = initializeGemini();
-
-  // Map toxicity level (0-10) to descriptive terms
-  const toxicityDescription = 
-    toxicityLevel <= 3 ? "friendly and mild" :
-    toxicityLevel <= 7 ? "moderate brainrot, somewhat edgy" :
-    "extremely toxic, unfiltered hell";
-
-  // Build the prompt based on the parameters
-  let prompt = `Generate a hilarious Indian tech Twitter shitpost in the style of "${postType}".
-  
-The toxicity level is ${toxicityLevel}/10 (${toxicityDescription}).`;
-
-  // Add topic if provided
-  if (topic && topic.trim() !== "") {
-    prompt += `\nThe topic should relate to: ${topic}.`;
-  }
-
-  // Add tones if selected
-  if (tones.length > 0) {
-    prompt += `\nThe tone should be: ${tones.join(", ")}.`;
-  }
-  
-  prompt += `\n\nThis post is for Indian tech Twitter targeting startup bros, meme lords, VCs, GPT fanboys, solopreneurs, and CS undergrads.
-
-Make sure to:
-- Keep it under 280 characters (Twitter limit)
-- Include relevant tech/startup slang
-- Maybe add some emojis where appropriate
-- Make it sound authentic to Indian tech Twitter
-- Don't include hashtags unless they're part of the joke
-- Don't include quotes or "Posted by @username" text`;
-
-  // Generate content with the model
   try {
+    const apiKey = getApiKey();
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Map toxicity level (0-10) to descriptive terms
+    const toxicityDescription = 
+      toxicityLevel <= 3 ? "friendly and mild" :
+      toxicityLevel <= 7 ? "moderate brainrot, somewhat edgy" :
+      "extremely toxic, unfiltered hell";
+
+    // Build the prompt based on the parameters
+    let prompt = `Generate a viral Twitter/X post in the style of modern viral Indian tech Twitter posts.
+    
+Post type: ${postType}
+${topic ? `Topic: ${topic}` : ''}
+Toxicity level (0-10): ${toxicityLevel} 
+${tones.length > 0 ? `Tone: ${tones.join(', ')}` : ''}
+
+Make it sound authentic, with the right amount of emojis and hashtags. Keep it within 280 characters. Don't use any placeholders. Make it feel real.
+
+The post should embody the essence of Indian tech Twitter culture and slang, with references to startups, coding, tech companies, buzzwords, and career advice.`;
+
+    // Generate content with the model
     const result = await model.generateContent(prompt);
     const response = result.response;
-    const text = response.text();
-    return text.trim();
+    return response.text();
   } catch (error) {
-    console.error("Error generating content with Gemini:", error);
-    throw new Error("Failed to generate content. Please try again.");
+    console.error('Error generating post with Gemini:', error);
+    throw new Error('Failed to generate content. Please try again later.');
   }
 } 

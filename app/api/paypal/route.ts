@@ -11,8 +11,18 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
+          async getAll() {
+            return (await cookieStore).getAll();
+          },
+          async setAll(cookiesToSet) {
+            try {
+              const resolvedCookiesStore = await cookieStore;
+              cookiesToSet.forEach(({ name, value, options }) =>
+                resolvedCookiesStore.set(name, value, options)
+              );
+            } catch (error) {
+              // Handle header already sent errors
+            }
           },
         },
       }

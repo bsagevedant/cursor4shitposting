@@ -2,18 +2,38 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import z from 'zod';
+
+// Input validation schema
+const generateRequestSchema = z.object({
+  postType: z.string().min(1).max(100),
+  toxicityLevel: z.number().int().min(0).max(10),
+  topic: z.string().nullable().optional(),
+  tones: z.array(z.string()).default([])
+});
 
 export async function POST(request: Request) {
   try {
-    // Get user session
+    // Get user session with async cookies handling for Next.js 15
     const cookieStore = cookies();
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
+          async getAll() {
+            return (await cookieStore).getAll();
+          },
+          async setAll(cookiesToSet) {
+            try {
+              const resolvedCookiesStore = await cookieStore;
+              cookiesToSet.forEach(({ name, value, options }) =>
+                resolvedCookiesStore.set(name, value, options)
+              );
+            } catch (error) {
+              // Handle header already sent errors
+            }
           },
         },
       }
@@ -75,30 +95,57 @@ export async function POST(request: Request) {
       }
     }
     
-    // Get the prompt from the request body
-    const { prompt } = await request.json();
+    // Get Gemini API key from environment variables
+    const apiKey = process.env.GEMINI_API_KEY;
     
-    if (!prompt) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY is not defined in environment variables');
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
     }
 
-    // Working API key for demonstration
-    const apiKey = "AIzaSyDx91LRh-gKMxhC4yxdJ6Jm-T2R3Ev-RnY";
+    // Parse and validate request body
+    const body = await request.json();
+    const validation = generateRequestSchema.safeParse(body);
+    
+    if (!validation.success) {
+      console.error('Invalid request body:', validation.error);
+      return NextResponse.json(
+        { error: 'Invalid request parameters' },
+        { status: 400 }
+      );
+    }
+    
+    const { postType, toxicityLevel, topic, tones } = validation.data;
 
-    // Initialize the Gemini API
+    // Initialize Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Build prompt
+    const prompt = `Generate a viral Twitter/X post in the style of modern viral Indian tech Twitter posts.
+    
+Post type: ${postType}
+${topic ? `Topic: ${topic}` : ''}
+Toxicity level (0-10): ${toxicityLevel} 
+${tones.length > 0 ? `Tone: ${tones.join(', ')}` : ''}
+
+Make it sound authentic, with the right amount of emojis and hashtags. Keep it within 280 characters. Don't use any placeholders. Make it feel real.
+
+The post should embody the essence of Indian tech Twitter culture and slang, with references to startups, coding, tech companies, buzzwords, and career advice.`;
 
     // Generate content
     const result = await model.generateContent(prompt);
-    const response = await result.response;
+    const response = result.response;
     const text = response.text();
 
-    return NextResponse.json({ generatedPost: text });
+    return NextResponse.json({ content: text.trim() });
   } catch (error) {
-    console.error('Error generating post:', error);
+    console.error('Error generating content:', error);
     return NextResponse.json(
-      { error: 'Failed to generate post' }, 
+      { error: 'Failed to generate content' },
       { status: 500 }
     );
   }
