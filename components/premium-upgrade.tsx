@@ -4,9 +4,18 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { toast } from "sonner";
 import { useUser } from "@/hooks/use-user";
 import { useUserStats } from '@/hooks/use-user-stats';
-import { Check, Crown } from "lucide-react";
+import { Check, Crown, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Script from 'next/script';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import Image from 'next/image';
 
 declare global {
   interface Window {
@@ -20,6 +29,7 @@ export function PremiumUpgrade() {
   const [selectedPlan, setSelectedPlan] = useState<'basic' | 'startup' | 'slayer'>('startup');
   const [isLoading, setIsLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   const plans = {
     basic: {
@@ -64,7 +74,12 @@ export function PremiumUpgrade() {
     }
   };
 
-  const initiatePayment = async () => {
+  const selectPlan = (plan: 'basic' | 'startup' | 'slayer') => {
+    setSelectedPlan(plan);
+    setPaymentDialogOpen(true);
+  };
+
+  const initiateRazorpayPayment = async () => {
     if (!user) {
       toast.error('Please sign in to upgrade to premium');
       return;
@@ -118,6 +133,9 @@ export function PremiumUpgrade() {
               throw new Error(verifyData.error || 'Payment verification failed');
             }
 
+            // Close payment dialog
+            setPaymentDialogOpen(false);
+
             // Update premium status
             const expiryDate = new Date(verifyData.expiryDate);
             await setPremiumStatus(expiryDate);
@@ -135,6 +153,11 @@ export function PremiumUpgrade() {
         theme: {
           color: '#6366F1',
         },
+        modal: {
+          ondismiss: function() {
+            setIsLoading(false);
+          }
+        }
       };
 
       const razorpay = new window.Razorpay(options);
@@ -146,6 +169,59 @@ export function PremiumUpgrade() {
       setIsLoading(false);
     }
   };
+
+  const initiatePaypalPayment = async () => {
+    if (!user) {
+      toast.error('Please sign in to upgrade to premium');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Create PayPal order
+      const response = await fetch('/api/paypal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: selectedPlan }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create PayPal order');
+      }
+
+      // Redirect to PayPal approval URL
+      window.location.href = data.approvalUrl;
+    } catch (error) {
+      console.error('PayPal error:', error);
+      toast.error('Failed to initiate PayPal payment. Please try again later.');
+      setIsLoading(false);
+    }
+  };
+
+  // Check if the payment was successful on page load (after PayPal redirect)
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const payment = queryParams.get('payment');
+    const expiry = queryParams.get('expiry');
+    
+    if (payment === 'success' && expiry) {
+      toast.success('Payment successful! You are now premium until ' + new Date(expiry).toLocaleDateString());
+      // Clear the URL params
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const error = queryParams.get('error');
+    if (error) {
+      toast.error('Payment failed. Please try again or contact support.');
+      // Clear the URL params
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   return (
     <>
@@ -190,11 +266,8 @@ export function PremiumUpgrade() {
               <Button 
                 className="w-full" 
                 variant="outline"
-                onClick={() => {
-                  setSelectedPlan('basic');
-                  initiatePayment();
-                }}
-                disabled={isLoading || !razorpayLoaded}
+                onClick={() => selectPlan('basic')}
+                disabled={isLoading}
               >
                 {isLoading && selectedPlan === 'basic' ? 'Processing...' : 'Subscribe Now'}
               </Button>
@@ -225,11 +298,8 @@ export function PremiumUpgrade() {
             <CardFooter>
               <Button 
                 className="w-full" 
-                onClick={() => {
-                  setSelectedPlan('startup');
-                  initiatePayment();
-                }}
-                disabled={isLoading || !razorpayLoaded}
+                onClick={() => selectPlan('startup')}
+                disabled={isLoading}
               >
                 <Crown className="mr-2 h-4 w-4" />
                 {isLoading && selectedPlan === 'startup' ? 'Processing...' : 'Subscribe Now'}
@@ -262,11 +332,8 @@ export function PremiumUpgrade() {
               <Button 
                 className="w-full" 
                 variant="outline"
-                onClick={() => {
-                  setSelectedPlan('slayer');
-                  initiatePayment();
-                }}
-                disabled={isLoading || !razorpayLoaded}
+                onClick={() => selectPlan('slayer')}
+                disabled={isLoading}
               >
                 <Crown className="mr-2 h-4 w-4" />
                 {isLoading && selectedPlan === 'slayer' ? 'Processing...' : 'Subscribe Now'}
@@ -278,6 +345,60 @@ export function PremiumUpgrade() {
         <div className="text-center text-sm text-muted-foreground mt-4">
           All plans include a 7-day money-back guarantee. No questions asked.
         </div>
+
+        {/* Payment Method Selection Dialog */}
+        <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Choose a Payment Method</DialogTitle>
+              <DialogDescription>
+                Select your preferred payment method for the {plans[selectedPlan].name} plan ({plans[selectedPlan].price}/month).
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              <Button 
+                onClick={initiateRazorpayPayment} 
+                className="flex items-center justify-between"
+                disabled={isLoading || !razorpayLoaded}
+              >
+                <span className="flex items-center">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Pay with Razorpay
+                </span>
+                <Image 
+                  src="/razorpay-logo.png" 
+                  alt="Razorpay" 
+                  width={80} 
+                  height={24}
+                  className="ml-2"
+                />
+              </Button>
+              
+              <Button 
+                onClick={initiatePaypalPayment} 
+                variant="outline" 
+                className="flex items-center justify-between"
+                disabled={isLoading}
+              >
+                <span>Pay with PayPal</span>
+                <Image 
+                  src="/paypal-logo.png" 
+                  alt="PayPal" 
+                  width={80} 
+                  height={24} 
+                  className="ml-2"
+                />
+              </Button>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPaymentDialogOpen(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );

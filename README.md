@@ -26,6 +26,41 @@ RAZORPAY_KEY_ID=your_razorpay_key_id
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
+## Environment Variables
+
+Create a `.env.local` file with the following variables:
+
+```
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+
+# PayPal Configuration
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_API_URL=https://api-m.sandbox.paypal.com  # Use https://api-m.paypal.com for production
+
+# App Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000  # Change in production
+```
+
+## Payment Processing
+
+The app supports two payment methods:
+
+1. **Razorpay**: For Indian payments in INR
+2. **PayPal**: For international payments in USD
+
+To set up the payment systems:
+
+1. Create accounts on Razorpay and PayPal Developer
+2. Set up the appropriate environment variables
+3. Add the necessary payment logos in the `public` directory
+
 ## Running the App
 
 ```bash

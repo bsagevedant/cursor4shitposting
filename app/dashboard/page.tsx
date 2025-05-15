@@ -106,10 +106,12 @@ export default function Dashboard() {
     // Check if user can generate more posts
     if (!canGenerate()) {
       toast({
-        title: "Rate limit reached",
-        description: "You have used all your free generations. Please upgrade to premium.",
+        title: "Free limit reached",
+        description: "You've used your 2 free generations. Upgrade to continue generating content.",
         variant: "destructive",
       })
+      // Redirect to pricing page when free generations are used up
+      router.push('/pricing')
       return
     }
 
@@ -270,7 +272,7 @@ export default function Dashboard() {
                 {!isPremium && (
                   <div className="text-sm text-orange-500 font-medium">
                     {freeGenerationsLeft > 0 
-                      ? `You have ${freeGenerationsLeft} free generations left` 
+                      ? `${freeGenerationsLeft} of 2 free generations remaining` 
                       : 'You have used all your free generations'}
                   </div>
                 )}
@@ -375,7 +377,7 @@ export default function Dashboard() {
                   className="w-full" 
                   size="lg" 
                   onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
-                  disabled={isGenerating || (!isPremium && freeGenerationsLeft === 0 && !canGenerate())}
+                  disabled={isGenerating}
                 >
                   {isGenerating ? (
                     <>
@@ -424,9 +426,22 @@ export default function Dashboard() {
                       <CopyIcon className="mr-2 h-4 w-4" />
                       Copy
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleGenerateTweet}>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Regenerate
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
+                    >
+                      {!isPremium && freeGenerationsLeft === 0 ? (
+                        <>
+                          <Crown className="mr-2 h-4 w-4" />
+                          Upgrade
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Regenerate
+                        </>
+                      )}
                     </Button>
                     <Button variant="outline" size="sm">
                       <Share2 className="mr-2 h-4 w-4" />
