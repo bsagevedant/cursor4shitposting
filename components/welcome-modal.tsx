@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Crown, Gift, Sparkles } from "lucide-react"
+import { ShoppingCart, Gift, Sparkles } from "lucide-react"
 
 interface WelcomeModalProps {
   isNewUser: boolean;
@@ -49,22 +49,24 @@ export function WelcomeModal({ isNewUser, freeCredits, onClose }: WelcomeModalPr
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <h3 className="text-center text-xl font-semibold">
-              You have {freeCredits} free generations
+              You have {freeCredits} credits
             </h3>
             <p className="text-center text-sm text-muted-foreground">
-              We've given you {freeCredits} free post generations to get started.
-              Generate your first viral tech shitpost in seconds!
+              We've given you {freeCredits} free credits to get started.
+              Each post generation costs 1 credit.
             </p>
           </div>
           
           <div className="rounded-lg border bg-card p-4">
             <h4 className="mb-2 font-medium flex items-center gap-2">
-              <Crown className="h-4 w-4 text-amber-500" />
-              Upgrade anytime for unlimited posts
+              <ShoppingCart className="h-4 w-4 text-amber-500" />
+              Need more credits?
             </h4>
             <p className="text-sm text-muted-foreground">
-              After using your free credits, you can upgrade to Premium 
-              for unlimited generations and advanced features.
+              After using your initial credits, you can purchase more:
+              <br />• 50 credits for $12
+              <br />• 175 credits for $39
+              <br />• 350 credits for $69
             </p>
           </div>
         </div>

@@ -15,11 +15,24 @@ export default function SignUp() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      // Get the current domain for the redirect
+      const currentDomain = window.location.origin
+      const isLocalhost = currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1')
+      
+      // For production, we want to use the actual domain rather than localhost
+      // This helps prevent redirect issues after email confirmation
+      let redirectUrl = `${currentDomain}/auth/callback`
+      
+      // If you have a production URL, uncomment the following and replace with your domain
+      // if (isLocalhost) {
+      //   redirectUrl = 'https://your-production-domain.com/auth/callback'
+      // }
+      
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectUrl,
         },
       })
       if (error) throw error

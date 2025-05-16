@@ -17,7 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AlertCircle, CopyIcon, RefreshCw, Share2, UserCircle, LogOut, Crown, Lock, Sparkles, HistoryIcon, Info } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { generatePost } from '@/lib/gemini'
+import { generatePost, testGeminiApiKey } from '@/lib/gemini'
+import { generateBrainrotPost } from '@/lib/post-generator'
 import { useUser } from "@/hooks/use-user"
 import { useUserStats } from "@/hooks/use-user-stats"
 import { 
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/alert"
 import { WelcomeModal } from "@/components/welcome-modal"
 import { CreditUpgradeModal } from "@/components/credit-upgrade-modal"
+import { CreditBalance } from "@/components/credit-balance"
 
 interface Tweet {
   content: string
@@ -66,11 +68,12 @@ export default function Dashboard() {
   // Free credit system state
   const [isNewUser, setIsNewUser] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [apiKeyWorking, setApiKeyWorking] = useState<boolean | null>(null)
   
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useUser()
-  const { userStats, canGenerate, incrementGenerationCount, isPremium, freeGenerationsLeft } = useUserStats()
+  const { userStats, canGenerate, decrementCredits, isPremium, creditBalance } = useUserStats()
 
   // Load recent generations
   useEffect(() => {
@@ -78,6 +81,28 @@ export default function Dashboard() {
       fetchRecentGenerations();
     }
   }, [user]);
+
+  // Test if the Gemini API key is working
+  useEffect(() => {
+    const checkApiKey = async () => {
+      try {
+        const isWorking = await testGeminiApiKey();
+        setApiKeyWorking(isWorking);
+        
+        if (!isWorking) {
+          toast({
+            title: "API Connection Issue",
+            description: "We're having trouble connecting to our AI. You can still generate posts, but they will use pre-made templates.",
+          });
+        }
+      } catch (error) {
+        console.error("Error testing API key:", error);
+        setApiKeyWorking(false);
+      }
+    };
+    
+    checkApiKey();
+  }, [toast]);
 
   useEffect(() => {
     if (user && userStats) {
@@ -93,6 +118,7 @@ export default function Dashboard() {
     if (!user) return;
     
     try {
+      // First check if the user_generations table exists
       const { data, error } = await supabase
         .from('user_generations')
         .select('content, created_at')
@@ -100,7 +126,15 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(5);
         
-      if (error) throw error;
+      // Handle empty result without throwing an error
+      if (error) {
+        console.error('Supabase error:', error);
+        setRecentGenerations([]);
+        if (activeTab === "history") {
+          setError('Failed to load recent posts. Please try again later.');
+        }
+        return;
+      }
       
       if (data && data.length > 0) {
         const tweets = data.map(item => ({
@@ -109,9 +143,18 @@ export default function Dashboard() {
           platform: "X for iPhone"
         }));
         setRecentGenerations(tweets);
+      } else {
+        // No data found - set empty array
+        setRecentGenerations([]);
       }
     } catch (err) {
       console.error('Error fetching recent generations:', err);
+      // Initialize an empty array to prevent UI errors when displaying recent generations
+      setRecentGenerations([]);
+      // Only set error state if we're on the history tab to avoid confusing the user
+      if (activeTab === "history") {
+        setError('Failed to load recent posts. Please try again later.');
+      }
     }
   };
 
@@ -184,6 +227,51 @@ export default function Dashboard() {
     }
   };
 
+  // Define a function to convert the dashboard toxicity level to the template format
+  const mapToxicityLevelToTemplateFormat = (level: number): 'Low' | 'Medium' | 'High' => {
+    if (level <= 3) return 'Low';
+    if (level <= 7) return 'Medium';
+    return 'High';
+  };
+
+  // Define a function to convert post type to category
+  const mapPostTypeToCategory = (type: string): string[] => {
+    switch(type.toLowerCase()) {
+      case 'hot take': return ['Startups'];
+      case 'cringe flex': return ['Hustle', 'Bro Culture'];
+      case 'tech advice': return ['AI/ML'];
+      case 'vc bait': return ['Startups', 'Crypto'];
+      case 'edgy roast': return ['Bro Culture'];
+      case 'self-pity': return ['Hustle'];
+      case 'desi dev joke': return ['IIT/IIM'];
+      default: return ['Startups', 'Hustle'];
+    }
+  };
+
+  // Generate a post using the local template system
+  const generateLocalPost = (postType: string, toxicityNum: number) => {
+    const toxicityLevel = mapToxicityLevelToTemplateFormat(toxicityNum);
+    const categories = mapPostTypeToCategory(postType);
+    
+    const { post, author } = generateBrainrotPost(
+      toxicityLevel, 
+      categories as any
+    );
+    
+    const newTweet = {
+      content: post,
+      timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      platform: "X for iPhone"
+    };
+    
+    setGeneratedTweet(newTweet);
+    
+    // Save to history
+    saveGenerationToHistory(post);
+    
+    return post;
+  };
+
   // Generate content with Gemini
   const handleGenerateTweet = async () => {
     // Check if user is authenticated
@@ -199,6 +287,10 @@ export default function Dashboard() {
 
     // Check if user can generate more posts
     if (!canGenerate()) {
+      toast({
+        title: "No credits available",
+        description: "You need credits to generate posts. Upgrade to get more credits.",
+      })
       // Show the upgrade modal instead of redirecting
       setShowUpgradeModal(true)
       return
@@ -208,43 +300,38 @@ export default function Dashboard() {
     setError(null)
     
     try {
-      // Increment generation count for non-premium users
-      if (!isPremium) {
-        const success = await incrementGenerationCount()
-        if (!success) {
-          throw new Error('Failed to increment generation count')
-        }
-        
-        // If this was the last free generation, show a toast notification
-        if (freeGenerationsLeft <= 1) {
-          toast({
-            title: "Last free credit used",
-            description: "You've used your last free credit. Upgrade for unlimited posts!",
-          })
-        }
+      console.log("Starting post generation process...")
+      
+      // Decrement credits for the user
+      const success = await decrementCredits()
+      if (!success) {
+        throw new Error('Failed to update credits')
       }
       
-      const content = await generatePost(
-        getPostTypeLabel(postType),
-        toxicityLevel,
-        topic || null,
-        getSelectedTones()
-      )
+      console.log("Credits decremented successfully")
       
-      const newTweet = {
-        content,
-        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-        platform: "X for iPhone"
-      };
+      // If this was the last credit, show a toast notification
+      if (creditBalance <= 1) {
+        toast({
+          title: "Last credit used",
+          description: "You've used your last credit. Upgrade for more credits!",
+        })
+      }
       
-      setGeneratedTweet(newTweet)
-      
-      // Save to history
-      await saveGenerationToHistory(content);
+      // Use the local generator instead of API to ensure reliability
+      console.log("Using local post generator for reliable generation");
+      generateLocalPost(getPostTypeLabel(postType), toxicityLevel);
       
     } catch (error) {
       console.error("Error generating tweet:", error)
       setError(error instanceof Error ? error.message : "Failed to generate content. Please try again.")
+      
+      // Even if there's an error with credits, try to generate content as a last resort
+      try {
+        generateLocalPost(getPostTypeLabel(postType), toxicityLevel);
+      } catch (fallbackError) {
+        console.error("Fallback generation also failed:", fallbackError);
+      }
     } finally {
       setIsGenerating(false)
     }
@@ -299,6 +386,20 @@ export default function Dashboard() {
     saveGenerationToHistory(newTweet.content);
   }
 
+  // Helper function to handle the generate button click
+  const handleGenerateClick = () => {
+    if (creditBalance <= 0) {
+      toast({
+        title: "No credits available",
+        description: "You need credits to generate posts. Upgrade to get more credits.",
+      })
+      setShowUpgradeModal(true)
+      return
+    }
+    
+    handleGenerateTweet()
+  }
+
   return (
     <div className="min-h-screen bg-background">
       
@@ -332,6 +433,7 @@ export default function Dashboard() {
                   Premium
                 </span>
               )}
+              <CreditBalance />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="rounded-full" size="icon">
@@ -375,7 +477,21 @@ export default function Dashboard() {
           </Alert>
         )}
 
-        <Tabs defaultValue="generator" value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        {/* API Key Warning Message */}
+        {apiKeyWorking === false && (
+          <Alert className="mb-6 border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+            <Info className="h-4 w-4 text-orange-500" />
+            <AlertTitle className="text-orange-500">Limited functionality</AlertTitle>
+            <AlertDescription className="text-orange-700 dark:text-orange-300">
+              We're having trouble connecting to our AI service. Posts will be generated using pre-made templates until this is resolved.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Tabs defaultValue="generator" value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          setError(null); // Clear errors when switching tabs
+        }} className="mb-6">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="generator" className="flex items-center justify-center">
               <Sparkles className="h-4 w-4 mr-2" />
@@ -398,10 +514,10 @@ export default function Dashboard() {
                       {!isPremium && (
                         <div className="flex items-center gap-2">
                           <div className="text-sm font-medium flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full">
-                            {freeGenerationsLeft > 0 ? (
+                            {creditBalance > 0 ? (
                               <>
-                                <span className="text-amber-500 font-bold">{freeGenerationsLeft}/2</span> 
-                                <span>free credits</span>
+                                <span className="text-amber-500 font-bold">{creditBalance}/2</span> 
+                                <span>credits</span>
                               </>
                             ) : (
                               <>
@@ -461,14 +577,21 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Topic Input */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Topic (Optional)</label>
-                      <Input 
-                        placeholder="e.g. Funding, React vs Svelte, Remote work, Startups" 
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                      />
+                    {/* Post Info (Credits / Topic Selection) */}
+                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                      <div className="flex-1 space-y-1">
+                        <h3 className="text-sm font-medium">Topic (Optional)</h3>
+                        <Input
+                          placeholder="e.g. AI startups, remote work, hustle culture..."
+                          value={topic}
+                          onChange={(e) => setTopic(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <CreditBalance />
+                      </div>
                     </div>
 
                     {/* Tone Selector */}
@@ -505,7 +628,7 @@ export default function Dashboard() {
                     <Button 
                       className="w-full" 
                       size="lg" 
-                      onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
+                      onClick={handleGenerateClick}
                       disabled={isGenerating}
                     >
                       {isGenerating ? (
@@ -515,14 +638,8 @@ export default function Dashboard() {
                         </>
                       ) : (
                         <>
-                          {!isPremium && freeGenerationsLeft === 0 ? (
-                            <>
-                              <Crown className="mr-2 h-4 w-4" />
-                              Upgrade
-                            </>
-                          ) : (
-                            <>🧠 Generate Shitpost</>
-                          )}
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Generate Post
                         </>
                       )}
                     </Button>
@@ -556,19 +673,19 @@ export default function Dashboard() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerateTweet}
+                                onClick={creditBalance <= 0 ? handleUpgrade : handleGenerateTweet}
                                 disabled={isGenerating}
                                 className="flex items-center"
                               >
-                                {!isPremium && freeGenerationsLeft === 0 ? (
+                                {creditBalance <= 0 ? (
                                   <>
                                     <Crown className="mr-1.5 h-3.5 w-3.5" />
                                     Upgrade
                                   </>
                                 ) : (
                                   <>
-                                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                    Regenerate
+                                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                                    Generate Post
                                   </>
                                 )}
                               </Button>
@@ -624,25 +741,35 @@ export default function Dashboard() {
                       </>
                     ) : (
                       <>
-                        <h3 className="text-lg font-semibold mb-2 flex items-center">
-                          {freeGenerationsLeft > 0 ? (
-                            <>Free Credits: <span className="ml-1 text-amber-300">{freeGenerationsLeft}/2</span></>
-                          ) : (
-                            <>Upgrade to Pro</>
-                          )}
-                        </h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold">Credit Balance</h3>
+                          <div className="bg-white/10 px-3 py-1.5 rounded-full">
+                            <span className="text-amber-300 font-bold">{creditBalance}</span>
+                            <span className="ml-1 text-sm">credits</span>
+                          </div>
+                        </div>
                         <p className="text-sm text-purple-200 mb-4">
-                          {freeGenerationsLeft > 0 
-                            ? `You have ${freeGenerationsLeft} free generation${freeGenerationsLeft > 1 ? 's' : ''} left. Upgrade for unlimited access.` 
-                            : `You've used all your free credits. Upgrade to continue generating viral content.`}
+                          {creditBalance > 0 
+                            ? `Each post costs 1 credit. Purchase more to continue creating viral content.` 
+                            : `You've run out of credits. Purchase more to continue generating viral content.`}
                         </p>
                         <Button 
                           variant="secondary" 
                           className="w-full"
-                          onClick={handleUpgrade}
+                          onClick={creditBalance > 0 ? handleGenerateTweet : handleUpgrade}
+                          disabled={isGenerating}
                         >
-                          <Crown className="mr-2 h-4 w-4" />
-                          Upgrade Now
+                          {creditBalance > 0 ? (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Generate Post
+                            </>
+                          ) : (
+                            <>
+                              <Crown className="mr-2 h-4 w-4" />
+                              Upgrade
+                            </>
+                          )}
                         </Button>
                       </>
                     )}
@@ -659,7 +786,14 @@ export default function Dashboard() {
                 <CardDescription>History of your generated content</CardDescription>
               </CardHeader>
               <CardContent>
-                {recentGenerations.length > 0 ? (
+                {error && activeTab === "history" ? (
+                  <div className="text-center py-8">
+                    <p className="text-destructive">{error}</p>
+                    <Button variant="outline" className="mt-4" onClick={fetchRecentGenerations}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : recentGenerations.length > 0 ? (
                   <div className="space-y-6">
                     {recentGenerations.map((tweet, index) => (
                       <div key={index} className="border-l-2 border-primary pl-4 py-2">
@@ -690,6 +824,23 @@ export default function Dashboard() {
         </Tabs>
       </main>
 
+      {/* Fixed Generate Button */}
+      {user && activeTab === "history" && (
+        <div className="fixed bottom-6 right-6">
+          <Button 
+            onClick={() => {
+              setActiveTab("generator");
+              router.push('/dashboard');
+            }} 
+            size="lg" 
+            className="rounded-full shadow-lg bg-primary hover:bg-primary/90 px-6"
+          >
+            <Sparkles className="mr-2 h-5 w-5" />
+            Create New Post
+          </Button>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="border-t border-border py-6 mt-12">
         <div className="container mx-auto px-4">
@@ -704,19 +855,11 @@ export default function Dashboard() {
         </div>
       </footer>
 
-      {/* Modals */}
-      {isNewUser && (
-        <WelcomeModal 
-          isNewUser={isNewUser} 
-          freeCredits={2} 
-          onClose={handleWelcomeClose}
-        />
-      )}
+      {/* Welcome Modal */}
+      <WelcomeModal isNewUser={isNewUser} freeCredits={2} onClose={handleWelcomeClose} />
       
-      <CreditUpgradeModal
-        isOpen={showUpgradeModal}
-        onClose={handleUpgradeModalClose}
-      />
+      {/* Upgrade Modal */}
+      <CreditUpgradeModal isOpen={showUpgradeModal} onClose={handleUpgradeModalClose} />
     </div>
   )
 }

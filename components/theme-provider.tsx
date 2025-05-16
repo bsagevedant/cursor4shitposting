@@ -15,18 +15,19 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       if (!user) return;
 
       try {
+        // Check if the table exists and user has a profile
         const { data, error } = await supabase
           .from('user_profiles')
           .select('dark_mode')
           .eq('id', user.id)
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to avoid error when no record exists
 
-        if (error) throw error;
-
+        // Only update theme if we have valid data
         if (data && data.dark_mode !== undefined) {
           document.documentElement.classList.toggle('dark', data.dark_mode);
         }
       } catch (error) {
+        // Just log the error, but don't throw - this prevents UI disruption
         console.error('Error syncing theme:', error);
       }
     };

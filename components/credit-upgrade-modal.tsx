@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Crown, Lock, Check } from "lucide-react"
+import { Crown, Lock, Check, Sparkles } from "lucide-react"
 import { useRouter } from 'next/navigation'
 
 interface CreditUpgradeModalProps {
@@ -41,19 +41,19 @@ export function CreditUpgradeModal({ isOpen, onClose }: CreditUpgradeModalProps)
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Lock className="h-5 w-5 text-primary" />
-            You've used all your free credits
+            You've run out of credits
           </DialogTitle>
           <DialogDescription>
-            Upgrade to premium to keep generating viral-worthy content
+            Purchase more credits to keep generating viral-worthy content
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="flex flex-col items-center justify-center space-y-2 py-2">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-purple-600 text-white">
-              <Crown className="h-6 w-6" />
+              <Sparkles className="h-6 w-6" />
             </div>
             <h3 className="text-center text-lg font-semibold">
-              Unlock Premium Benefits
+              Available Credit Packages
             </h3>
           </div>
           
@@ -61,22 +61,22 @@ export function CreditUpgradeModal({ isOpen, onClose }: CreditUpgradeModalProps)
             <div className="flex items-start gap-2">
               <Check className="h-5 w-5 text-green-500 mt-0.5" />
               <div>
-                <p className="font-medium">Unlimited Generations</p>
-                <p className="text-sm text-muted-foreground">Create as many viral posts as you want</p>
+                <p className="font-medium">Post Starter - $12</p>
+                <p className="text-sm text-muted-foreground">50 credits for generating posts</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Check className="h-5 w-5 text-green-500 mt-0.5" />
               <div>
-                <p className="font-medium">Advanced Post Types</p>
-                <p className="text-sm text-muted-foreground">Access exclusive templates and tones</p>
+                <p className="font-medium">Content Creator - $39</p>
+                <p className="text-sm text-muted-foreground">175 credits at a discount</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Check className="h-5 w-5 text-green-500 mt-0.5" />
               <div>
-                <p className="font-medium">Enhanced Analytics</p>
-                <p className="text-sm text-muted-foreground">Track performance and improve your content</p>
+                <p className="font-medium">Power User - $69</p>
+                <p className="text-sm text-muted-foreground">350 credits for best value</p>
               </div>
             </div>
           </div>
@@ -86,8 +86,8 @@ export function CreditUpgradeModal({ isOpen, onClose }: CreditUpgradeModalProps)
             Maybe Later
           </Button>
           <Button onClick={handleUpgrade} className="sm:flex-1" size="lg">
-            <Crown className="mr-2 h-4 w-4" />
-            Upgrade Now
+            <Sparkles className="mr-2 h-4 w-4" />
+            Buy Credits
           </Button>
         </DialogFooter>
       </DialogContent>

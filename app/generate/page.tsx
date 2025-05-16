@@ -6,16 +6,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { GeneratePostButton } from "@/components/generate-post-button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { InfoIcon } from "lucide-react";
 
 export default function GeneratePost() {
   const [prompt, setPrompt] = useState('');
   const [generatedPost, setGeneratedPost] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUsingTemplates, setIsUsingTemplates] = useState(false);
+  const [templateNotice, setTemplateNotice] = useState('');
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setIsUsingTemplates(false);
+    setTemplateNotice('');
     
     try {
       const response = await fetch('/api/generate', {
@@ -23,7 +29,12 @@ export default function GeneratePost() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          postType: prompt,
+          toxicityLevel: 5,
+          topic: '',
+          tones: []
+        }),
       });
 
       const data = await response.json();
@@ -32,7 +43,13 @@ export default function GeneratePost() {
         throw new Error(data.error || 'Failed to generate post');
       }
       
-      setGeneratedPost(data.generatedPost);
+      setGeneratedPost(data.content);
+      
+      // Check if using templates
+      if (data.isFromTemplate) {
+        setIsUsingTemplates(true);
+        setTemplateNotice(data.notice || "Using template mode");
+      }
     } catch (error) {
       console.error('Error generating post:', error);
       toast({
@@ -82,6 +99,15 @@ export default function GeneratePost() {
               )}
             </div>
           </form>
+
+          {isUsingTemplates && templateNotice && (
+            <Alert className="mt-4 bg-amber-50 border-amber-200 text-amber-800">
+              <InfoIcon className="h-4 w-4" />
+              <AlertDescription>
+                {templateNotice}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {generatedPost && (
             <div className="mt-6 p-4 bg-muted rounded-lg">

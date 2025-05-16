@@ -31,7 +31,7 @@ declare global {
 export function BrainrotGenerator() {
   const { user } = useUser();
   const { savePost } = usePosts();
-  const { userStats, canGenerate, incrementGenerationCount, isPremium, freeGenerationsLeft, setPremiumStatus } = useUserStats();
+  const { userStats, canGenerate, decrementCredits, isPremium, creditBalance } = useUserStats();
   const [toxicityLevel, setToxicityLevel] = useState<ToxicityLevel>('Medium');
   const [selectedCategories, setSelectedCategories] = useState<PostCategory>({
     startups: true,
@@ -51,6 +51,8 @@ export function BrainrotGenerator() {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [isUsingTemplates, setIsUsingTemplates] = useState(false);
+  const [templateNotice, setTemplateNotice] = useState('');
 
   const handleSpecialMode = (mode: 'linkedin' | 'vc' | 'founder') => {
     // TODO: Implement special mode generation
@@ -87,28 +89,88 @@ export function BrainrotGenerator() {
     }
 
     setIsGenerating(true);
+    setIsUsingTemplates(false);
+    setTemplateNotice('');
     
     try {
-      // Increment generation count for non-premium users
+      // Decrement credits for non-premium users
       if (!isPremium) {
-        const success = await incrementGenerationCount();
+        const success = await decrementCredits();
         if (!success) {
-          throw new Error('Failed to increment generation count');
+          throw new Error('Failed to decrement credits');
         }
       }
       
-      // Simulate a delay for the generation process
-      setTimeout(() => {
+      // Try to generate using the AI service
+      try {
+        const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
+        
+        // Convert toxicity level to a number
+        let toxicityNumber = 5; // Default medium
+        if (toxicityLevel === 'Low') toxicityNumber = 2;
+        if (toxicityLevel === 'High') toxicityNumber = 8;
+        
+        // Call the API to generate a post
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            postType: 'tech_twitter',
+            toxicityLevel: toxicityNumber,
+            topic: '',
+            tones: selectedCategoryTypes,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('API request failed');
+        }
+        
+        const data = await response.json();
+        
+        // Set the generated post content
+        setGeneratedPost(data.content);
+        
+        // Check if this is from a template (fallback mode)
+        if (data.isFromTemplate) {
+          setIsUsingTemplates(true);
+          setTemplateNotice(data.notice || "Using template mode");
+          
+          // Set author if provided from template
+          if (data.author) {
+            setAuthorName(data.author.name);
+            setAuthorHandle(data.author.handle);
+          } else {
+            // Fallback to client-side template author selection
+            const { author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
+            setAuthorName(author.name);
+            setAuthorHandle(author.handle);
+          }
+        } else {
+          // Regular AI-generated post, use client-side author selection
+          const { author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
+          setAuthorName(author.name);
+          setAuthorHandle(author.handle);
+        }
+      } catch (error) {
+        console.error('Error calling API, falling back to client-side templates:', error);
+        
+        // Fallback to client-side generation if API fails
         const selectedCategoryTypes = mapSelectedCategoriesToTypes(selectedCategories);
         const { post, author } = generateBrainrotPost(toxicityLevel, selectedCategoryTypes);
         setGeneratedPost(post);
         setAuthorName(author.name);
         setAuthorHandle(author.handle);
-        setIsGenerating(false);
-      }, 600);
+        
+        setIsUsingTemplates(true);
+        setTemplateNotice("We're having trouble connecting to our AI service. Posts will be generated using pre-made templates until this is resolved.");
+      }
     } catch (error) {
       console.error('Error generating post:', error);
       toast.error('Failed to generate post. Please try again.');
+    } finally {
       setIsGenerating(false);
     }
   };
@@ -273,7 +335,7 @@ export function BrainrotGenerator() {
 
             // Update premium status
             const expiryDate = new Date(verifyData.expiryDate);
-            await setPremiumStatus(expiryDate);
+            await decrementCredits();
 
             toast.success('Payment successful! You now have unlimited generations.');
           } catch (error) {
@@ -327,8 +389,8 @@ export function BrainrotGenerator() {
         {!isPremium && (
           <div className="flex items-center justify-center space-x-2 text-sm">
             <span className="text-orange-500 font-medium">
-              {freeGenerationsLeft > 0 
-                ? `You have ${freeGenerationsLeft} free generations left` 
+              {creditBalance > 0 
+                ? `You have ${creditBalance} credit(s) left` 
                 : 'You have used all your free generations'}
             </span>
             <Button 
@@ -337,7 +399,7 @@ export function BrainrotGenerator() {
               onClick={handleUpgrade}
               disabled={!razorpayLoaded}
             >
-              {freeGenerationsLeft > 0 ? 'View Premium Plans' : 'Upgrade to Premium'}
+              {creditBalance > 0 ? 'View Premium Plans' : 'Upgrade to Premium'}
             </Button>
           </div>
         )}
@@ -464,12 +526,12 @@ export function BrainrotGenerator() {
             <Button 
               className="w-full" 
               size="lg" 
-              onClick={!isPremium && freeGenerationsLeft === 0 ? handleUpgrade : handleGenerate}
-              disabled={isGenerating || (!isPremium && freeGenerationsLeft === 0 && !razorpayLoaded)}
+              onClick={!isPremium && creditBalance === 0 ? handleUpgrade : handleGenerate}
+              disabled={isGenerating || (!isPremium && creditBalance === 0 && !razorpayLoaded)}
             >
               {isGenerating 
                 ? 'Processing...' 
-                : !isPremium && freeGenerationsLeft === 0
+                : !isPremium && creditBalance === 0
                   ? 'Upgrade to Generate More'
                   : 'Generate New Post'
               }

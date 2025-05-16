@@ -35,6 +35,7 @@ export function useUserStats() {
                 user_id: user.id,
                 generation_count: 0,
                 premium_until: null,
+                credits: 2, // New users start with 2 credits
                 last_generated_at: now,
                 created_at: now,
                 updated_at: now
@@ -61,20 +62,71 @@ export function useUserStats() {
     fetchUserStats();
   }, [user]);
 
-  // Check if user can generate (has free generations or is premium)
+  // Check if user can generate (has credits available)
   const canGenerate = () => {
     if (!userStats) return false;
 
-    // If user is premium, allow generation
-    if (userStats.premium_until && new Date(userStats.premium_until) > new Date()) {
-      return true;
-    }
-
-    // Otherwise, check generation count
-    return userStats.generation_count < 2; // Allow 2 free generations
+    // Allow generation if user has credits > 0
+    return userStats.credits > 0;
   };
 
-  // Increment generation count
+  // Decrement credits when generating a post
+  const decrementCredits = async () => {
+    if (!user || !userStats || userStats.credits <= 0) return false;
+
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('user_stats')
+        .update({
+          credits: userStats.credits - 1,
+          generation_count: userStats.generation_count + 1,
+          last_generated_at: now,
+          updated_at: now
+        })
+        .eq('id', userStats.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setUserStats(data);
+      return true;
+    } catch (error) {
+      console.error('Error updating credits:', error);
+      toast.error('Failed to update credits');
+      return false;
+    }
+  };
+
+  // Add credits after purchase
+  const addCredits = async (amount: number) => {
+    if (!user || !userStats) return false;
+
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('user_stats')
+        .update({
+          credits: userStats.credits + amount,
+          updated_at: now
+        })
+        .eq('id', userStats.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setUserStats(data);
+      return true;
+    } catch (error) {
+      console.error('Error adding credits:', error);
+      toast.error('Failed to add credits');
+      return false;
+    }
+  };
+
+  // Increment generation count (keeping this for compatibility)
   const incrementGenerationCount = async () => {
     if (!user || !userStats) return false;
 
@@ -133,10 +185,12 @@ export function useUserStats() {
     userStats,
     loading,
     canGenerate,
+    decrementCredits,
+    addCredits,
     incrementGenerationCount,
     setPremiumStatus,
     isPremium: userStats?.premium_until && new Date(userStats.premium_until) > new Date(),
-    freeGenerationsUsed: userStats?.generation_count || 0,
-    freeGenerationsLeft: userStats ? Math.max(0, 2 - userStats.generation_count) : 0
+    creditBalance: userStats?.credits || 0,
+    freeGenerationsUsed: userStats?.generation_count || 0
   };
 } 

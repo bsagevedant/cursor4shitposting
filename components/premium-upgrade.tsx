@@ -25,7 +25,7 @@ declare global {
 
 export function PremiumUpgrade() {
   const { user } = useUser();
-  const { isPremium, freeGenerationsUsed, freeGenerationsLeft, setPremiumStatus } = useUserStats();
+  const { isPremium, creditBalance, addCredits } = useUserStats();
   const [selectedPlan, setSelectedPlan] = useState<'basic' | 'startup' | 'slayer'>('startup');
   const [isLoading, setIsLoading] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
@@ -33,44 +33,47 @@ export function PremiumUpgrade() {
 
   const plans = {
     basic: {
-      name: 'Desi Basic',
+      name: 'Post Starter',
       price: '$12',
       rawPrice: 12,
+      credits: 50,
       features: [
-        'Limited post generations (100/month)',
-        'Access to basic modes',
+        '50 post credits',
+        'Save generated posts',
+        'Access to all post types',
         'Standard support'
       ],
-      validity: 30,
-      idealFor: 'Students, early-stage meme lords'
+      idealFor: 'Casual users, beginners'
     },
     startup: {
-      name: 'Startup Beast',
+      name: 'Content Creator',
       price: '$39',
       rawPrice: 39,
+      credits: 175,
       features: [
-        'Unlimited post generations',
-        'Access to all special modes',
+        '175 post credits',
+        'Save generated posts',
+        'Access to all post types',
         'Custom templates',
         'Priority support'
       ],
-      validity: 30,
-      idealFor: 'Founders, shitposting SaaS bros'
+      idealFor: 'Regular content creators, professionals'
     },
     slayer: {
-      name: 'VC Slayer',
+      name: 'Power User',
       price: '$69',
       rawPrice: 69,
+      credits: 350,
       features: [
-        'Unlimited post generations',
-        'Access to all special modes',
+        '350 post credits',
+        'Save generated posts',
+        'Access to all post types',
         'Custom templates',
-        'VIP support',
+        'Priority support',
         'Advanced analytics',
         'White-label exports'
       ],
-      validity: 30,
-      idealFor: 'Meme kings, ghostwriters, agencies'
+      idealFor: 'Agencies, power users, teams'
     }
   };
 
@@ -81,7 +84,7 @@ export function PremiumUpgrade() {
 
   const initiateRazorpayPayment = async () => {
     if (!user) {
-      toast.error('Please sign in to upgrade to premium');
+      toast.error('Please sign in to purchase credits');
       return;
     }
 
@@ -109,7 +112,7 @@ export function PremiumUpgrade() {
         amount: data.amount,
         currency: data.currency,
         name: 'cursor4shitposting',
-        description: `${plans[selectedPlan].name} Subscription`,
+        description: `${plans[selectedPlan].name} - ${plans[selectedPlan].credits} Credits`,
         order_id: data.orderId,
         handler: async function (response: any) {
           try {
@@ -123,7 +126,7 @@ export function PremiumUpgrade() {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
-                validity: plans[selectedPlan].validity
+                credits: plans[selectedPlan].credits
               }),
             });
 
@@ -136,11 +139,10 @@ export function PremiumUpgrade() {
             // Close payment dialog
             setPaymentDialogOpen(false);
 
-            // Update premium status
-            const expiryDate = new Date(verifyData.expiryDate);
-            await setPremiumStatus(expiryDate);
+            // Add credits to user account
+            await addCredits(plans[selectedPlan].credits);
 
-            toast.success('Payment successful! You are now premium until ' + expiryDate.toLocaleDateString());
+            toast.success(`Payment successful! ${plans[selectedPlan].credits} credits have been added to your account.`);
           } catch (error) {
             console.error('Verification error:', error);
             toast.error('Payment verification failed. Please contact support.');
@@ -172,7 +174,7 @@ export function PremiumUpgrade() {
 
   const initiatePaypalPayment = async () => {
     if (!user) {
-      toast.error('Please sign in to upgrade to premium');
+      toast.error('Please sign in to purchase credits');
       return;
     }
 
@@ -185,7 +187,10 @@ export function PremiumUpgrade() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ plan: selectedPlan }),
+        body: JSON.stringify({ 
+          plan: selectedPlan,
+          credits: plans[selectedPlan].credits 
+        }),
       });
 
       const data = await response.json();
@@ -207,10 +212,14 @@ export function PremiumUpgrade() {
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const payment = queryParams.get('payment');
-    const expiry = queryParams.get('expiry');
+    const credits = queryParams.get('credits');
     
-    if (payment === 'success' && expiry) {
-      toast.success('Payment successful! You are now premium until ' + new Date(expiry).toLocaleDateString());
+    if (payment === 'success' && credits) {
+      const creditAmount = parseInt(credits, 10);
+      if (!isNaN(creditAmount)) {
+        addCredits(creditAmount);
+        toast.success(`Payment successful! ${creditAmount} credits have been added to your account.`);
+      }
       // Clear the URL params
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -232,26 +241,25 @@ export function PremiumUpgrade() {
       
       <div className="space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold">Premium Plans</h2>
+          <h2 className="text-2xl font-bold">Credit Packages</h2>
           <p className="text-muted-foreground">
-            {isPremium 
-              ? 'You are currently on a premium plan.' 
-              : `You have used ${freeGenerationsUsed}/2 free generations.`}
+            {`You currently have ${creditBalance} credits in your account.`}
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-4">
-          {/* Desi Basic Plan */}
+          {/* Basic Plan */}
           <Card className={selectedPlan === 'basic' ? 'border-2 border-primary' : ''}>
             <CardHeader>
-              <CardTitle>Desi Basic</CardTitle>
-              <CardDescription>For meme beginners</CardDescription>
+              <CardTitle>{plans.basic.name}</CardTitle>
+              <CardDescription>For casual users</CardDescription>
               <div className="mt-2">
                 <Badge variant="secondary">Starter</Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-2">{plans.basic.price} <span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-3xl font-bold mb-2">{plans.basic.price}</div>
+              <div className="text-xl font-semibold text-primary mb-2">{plans.basic.credits} Credits</div>
               <div className="text-sm text-muted-foreground mb-4">Ideal for: {plans.basic.idealFor}</div>
               <ul className="space-y-2">
                 {plans.basic.features.map((feature, i) => (
@@ -269,22 +277,23 @@ export function PremiumUpgrade() {
                 onClick={() => selectPlan('basic')}
                 disabled={isLoading}
               >
-                {isLoading && selectedPlan === 'basic' ? 'Processing...' : 'Subscribe Now'}
+                {isLoading && selectedPlan === 'basic' ? 'Processing...' : 'Buy Credits'}
               </Button>
             </CardFooter>
           </Card>
 
-          {/* Startup Beast Plan */}
+          {/* Startup Plan */}
           <Card className={selectedPlan === 'startup' ? 'border-2 border-primary' : ''}>
             <CardHeader>
-              <CardTitle>Startup Beast</CardTitle>
-              <CardDescription>For serious shitposters</CardDescription>
+              <CardTitle>{plans.startup.name}</CardTitle>
+              <CardDescription>For content creators</CardDescription>
               <div className="mt-2">
-                <Badge variant="secondary">Most Popular</Badge>
+                <Badge variant="secondary">Best Value</Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-2">{plans.startup.price} <span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-3xl font-bold mb-2">{plans.startup.price}</div>
+              <div className="text-xl font-semibold text-primary mb-2">{plans.startup.credits} Credits</div>
               <div className="text-sm text-muted-foreground mb-4">Ideal for: {plans.startup.idealFor}</div>
               <ul className="space-y-2">
                 {plans.startup.features.map((feature, i) => (
@@ -302,22 +311,23 @@ export function PremiumUpgrade() {
                 disabled={isLoading}
               >
                 <Crown className="mr-2 h-4 w-4" />
-                {isLoading && selectedPlan === 'startup' ? 'Processing...' : 'Subscribe Now'}
+                {isLoading && selectedPlan === 'startup' ? 'Processing...' : 'Buy Credits'}
               </Button>
             </CardFooter>
           </Card>
 
-          {/* VC Slayer Plan */}
+          {/* Slayer Plan */}
           <Card className={selectedPlan === 'slayer' ? 'border-2 border-primary' : ''}>
             <CardHeader>
-              <CardTitle>VC Slayer</CardTitle>
-              <CardDescription>For meme professionals</CardDescription>
+              <CardTitle>{plans.slayer.name}</CardTitle>
+              <CardDescription>For power users</CardDescription>
               <div className="mt-2">
                 <Badge>Premium</Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-2">{plans.slayer.price} <span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-3xl font-bold mb-2">{plans.slayer.price}</div>
+              <div className="text-xl font-semibold text-primary mb-2">{plans.slayer.credits} Credits</div>
               <div className="text-sm text-muted-foreground mb-4">Ideal for: {plans.slayer.idealFor}</div>
               <ul className="space-y-2">
                 {plans.slayer.features.map((feature, i) => (
@@ -336,14 +346,14 @@ export function PremiumUpgrade() {
                 disabled={isLoading}
               >
                 <Crown className="mr-2 h-4 w-4" />
-                {isLoading && selectedPlan === 'slayer' ? 'Processing...' : 'Subscribe Now'}
+                {isLoading && selectedPlan === 'slayer' ? 'Processing...' : 'Buy Credits'}
               </Button>
             </CardFooter>
           </Card>
         </div>
 
         <div className="text-center text-sm text-muted-foreground mt-4">
-          All plans include a 7-day money-back guarantee. No questions asked.
+          All packages include a 7-day money-back guarantee. No questions asked.
         </div>
 
         {/* Payment Method Selection Dialog */}
@@ -352,7 +362,7 @@ export function PremiumUpgrade() {
             <DialogHeader>
               <DialogTitle>Choose a Payment Method</DialogTitle>
               <DialogDescription>
-                Select your preferred payment method for the {plans[selectedPlan].name} plan ({plans[selectedPlan].price}/month).
+                Select your preferred payment method for {plans[selectedPlan].credits} credits ({plans[selectedPlan].price}).
               </DialogDescription>
             </DialogHeader>
             

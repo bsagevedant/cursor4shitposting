@@ -10,6 +10,7 @@ interface GeneratePostButtonProps {
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   className?: string;
   disabled?: boolean;
+  onTemplateNotice?: (notice: string, isTemplate: boolean) => void;
 }
 
 export function GeneratePostButton({
@@ -18,6 +19,7 @@ export function GeneratePostButton({
   variant = "default",
   className = "",
   disabled = false,
+  onTemplateNotice,
 }: GeneratePostButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -33,7 +35,12 @@ export function GeneratePostButton({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          postType: prompt,
+          toxicityLevel: 5,
+          topic: '',
+          tones: []
+        }),
       });
 
       const data = await response.json();
@@ -42,7 +49,15 @@ export function GeneratePostButton({
         throw new Error(data.error || 'Failed to generate post');
       }
       
-      onPostGenerated(data.generatedPost);
+      onPostGenerated(data.content);
+      
+      // Check if using templates and notify parent component if callback provided
+      if (data.isFromTemplate && onTemplateNotice) {
+        onTemplateNotice(
+          data.notice || "We're having trouble connecting to our AI service. Posts will be generated using pre-made templates until this is resolved.",
+          true
+        );
+      }
     } catch (error) {
       console.error('Error generating post:', error);
       toast({
