@@ -2,15 +2,18 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Get API key from environment variables
 function getApiKey(): string {
+  // TEMPORARY: Use a hardcoded API key for testing
+  return "AIzaSyDWzNkXzzh9z8JTTJqSznkTn_Lh-6oUjBk"; // Replace with your actual API key
+  
   // In client components, we need to use NEXT_PUBLIC_* prefixed env vars
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  // const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   
-  if (!apiKey) {
-    console.error('NEXT_PUBLIC_GEMINI_API_KEY is not defined in environment variables');
-    throw new Error('Missing Gemini API key. Please set NEXT_PUBLIC_GEMINI_API_KEY in your environment variables.');
-  }
+  // if (!apiKey) {
+  //   console.error('NEXT_PUBLIC_GEMINI_API_KEY is not defined in environment variables');
+  //   throw new Error('Missing Gemini API key. Please set NEXT_PUBLIC_GEMINI_API_KEY in your environment variables.');
+  // }
   
-  return apiKey;
+  // return apiKey;
 }
 
 // Test if the Gemini API key is working

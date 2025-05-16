@@ -156,7 +156,10 @@ export async function POST(request: Request) {
     try {
       // Try to use the AI service first
       // Get Gemini API key from environment variables
-      const apiKey = process.env.GEMINI_API_KEY;
+      // const apiKey = process.env.GEMINI_API_KEY;
+      
+      // TEMPORARY: Use a hardcoded API key for testing
+      const apiKey = "AIzaSyDWzNkXzzh9z8JTTJqSznkTn_Lh-6oUjBk"; // Replace with your actual API key
       
       if (!apiKey) {
         throw new Error('GEMINI_API_KEY is not defined in environment variables');
